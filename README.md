@@ -1,2 +1,2 @@
-# stimelaKAT
-Stimela based MeerKAT self-calibration pipeline
+# VerMeerKAT
+RATT/RARGMeerKAT self-calibration pipeline
