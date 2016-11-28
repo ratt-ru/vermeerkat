@@ -20,6 +20,7 @@
 
 import collections
 import itertools
+import os
 
 import vermeerkat
 
@@ -41,12 +42,13 @@ def query_recent_observations(solr_url):
         # Only want 4K mode
         fq('NumFreqChannels', '4096'),
         # Observations from the last 3 days
-        fq('StartTime', '[NOW-7DAYS TO NOW]')]
+        fq('StartTime', '[NOW-3DAYS TO NOW]')]
 
     # Construct the query
     search = ' AND '.join('%s:%s' % (fq.field, fq.query) for fq in query_list)
 
-    vermeerkat.log.info('Querying solr server %s' % solr_url)
+    vermeerkat.log.info("Querying solr server '%s' "
+                        "with query string '%s'." % (solr_url, search))
 
     archive = pysolr.Solr(solr_url)
 
@@ -110,13 +112,13 @@ def download_observation(observation):
         observation['StartTime'], observation['Description'], observation['Duration']))
 
     # Infer the HTTP location from the KAT archive file location
-    location = observation['FileLocation'][0].replace('/var/kat', 'http://kat-archive.kat.ac.za', 1)
+    location = observation['FileLocation'][0]
+    location = location.replace('/var/kat', 'http://kat-archive.kat.ac.za', 1)
     filename = observation['Filename']
-    url = ''.join((location, '/', filename))
+    url = os.path.join(location, filename)
     r = requests.get(url, stream=True)
 
     file_size = r.headers.get('Content-Length', None)
-
     vermeerkat.log.info('%s %s %s' % (url, file_size, r.status_code))
 
     f = open(filename, 'wb')

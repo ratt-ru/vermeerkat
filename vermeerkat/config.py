@@ -19,17 +19,31 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import argparse
+import collections
 import ConfigParser
+import itertools
 import os
-import urlparse
 import sys
 
 import vermeerkat
 
+def general_section_parser():
+    """ Parses the general section """
+    parser = argparse.ArgumentParser("General Section")
+
+    # Solr server URL
+    parser.add_argument('-s', '--solr-url',
+        default='http://127.0.0.1/solr/core',
+        help='URL of the Solr server')
+
+    return parser
+
+# Dictionary of argument parsers for particular sections
+# Keys should correspond to associated sections in the
+_ARGPARSERS = { 'general': general_section_parser }
+
 def configuration(args=None):
     """ Extract """
-
-    print sys.argv
 
     # Create parser object
     parser = argparse.ArgumentParser("VerMeerKAT")
@@ -55,30 +69,67 @@ def configuration(args=None):
             'conf', 'default.conf'),)
 
     # Parse configuration file arguments, if any
-    args, remaining_argv = parser.parse_known_args()
+    args, remaining_args = parser.parse_known_args(args)
+
+    # Lambda for transforming sections and options
+    xformer = lambda s: s.lower().replace('-', '_')
 
     # Load in configuration options from the configuration file
     vermeerkat.log.info("Loading defaults from {}".format(args.config))
     config_parser = ConfigParser.SafeConfigParser()
     # Convert dashes in options to underscores
     # as this is how argparse will treat them
-    config_parser.optionxform = lambda o: o.replace('-', '_')
+    config_parser.optionxform = xformer
     # Read the configuration file and extract options from the General section
     config_parser.read(args.config)
-    config_defaults = dict(config_parser.items('General'))
 
-    #==========================================================
-    # Handle the rest of the arguments
-    # A default value should be supplied, even if it's
-    # to just illustrate what the argument should look like
-    #==========================================================
+    def _section_args(sections, args):
+        """ Yields namedtuples containing arguments for each section """
 
-    # Solr server URL
-    parser.add_argument('-s', '--solr-url',
-        default='http://127.0.0.1/solr/core',
-        help='URL of the Solr server')
+        for section, (cfg_section, parser_factory) in sections.iteritems():
+            # Extract configuration file options for this section
+            # and use them as defaults for returning results
 
-    # Set any defaults taken from the configuration file
-    parser.set_defaults(**config_defaults)
-    # Parse the rest of the command line arguments
-    return parser.parse_args(remaining_argv)
+            section_defaults = ({} if cfg_section is None
+                else dict(config_parser.items(cfg_section)))
+
+            # If present, use the argument parser to parse
+            # (and validate) arguments
+            if parser_factory:
+                parser = parser_factory()
+                parser.set_defaults(**section_defaults)
+                section_args, args = parser.parse_known_args(args)
+            # Otherwise just dump the section options into a namedtuple
+            # that looks like one produced by argparse
+            else:
+                vermeerkat.log.warn("No argument parser "
+                    "exists for Section '{}'. Options will "
+                    "not be validated for this section.".format(cfg_section))
+
+                T = collections.namedtuple('Namespace',
+                    section_defaults.keys())
+
+                section_args = T(**section_defaults)
+
+            yield section_args
+
+    # Find the list of sections that should be parsed.
+    # Obtained from sections in the config file and sections in
+    # the _ARGPARSERS dictionary.
+    cfg_sections = { xformer(s): s for s in config_parser.sections() }
+    argp_sections = { xformer(k): pf for k, pf in _ARGPARSERS.iteritems() }
+    all_sections = set(itertools.chain(cfg_sections.iterkeys(),
+        argp_sections.iterkeys()))
+
+    # Match configuration and arg parser sections up
+    # after transforming their keys
+    sections = { s: (cfg_sections.get(s, None), argp_sections.get(s, None))
+        for s in all_sections }
+
+    # Create a global namespace type that holds argparse
+    # results for each section. Looks like an argparse args Namespace
+    global_namespace = collections.namedtuple('Namespace', all_sections)
+
+    # Create the namespace using sections as arguments
+    return global_namespace(*(s for s in _section_args(
+        sections, remaining_args)))

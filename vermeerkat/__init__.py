@@ -59,7 +59,7 @@ def run(args):
 
     cfg = configuration(args)
 
-    observations = query_recent_observations(cfg.solr_url)
+    observations = query_recent_observations(cfg.general.solr_url)
 
     for o in observations:
         download_observation(o)
