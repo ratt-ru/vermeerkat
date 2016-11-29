@@ -28,6 +28,8 @@ from version import __version__
 # Where is the module installed?
 __install_path = os.path.split(os.path.abspath(vermeerkat.__file__))[0]
 
+__stimela_script_path = os.path.join(__install_path, 'stimela_script.py')
+
 def create_logger():
     """ Create a console logger """
     log = logging.getLogger(__name__)
@@ -61,5 +63,24 @@ def run(args):
 
     observations = query_recent_observations(cfg.general.solr_url)
 
+    def _create_stimela_dirs():
+        # Create stimela input and output directories
+        for path in ('input', 'output'):
+            full_path = os.path.join(os.getcwd(), path)
+
+            if not os.path.exists(full_path):
+                os.mkdir(full_path)
+            else:
+                if not os.path.isdir(full_path):
+                    raise ValueError("Error creating directory '{}'. "
+                        "A file already exists at this location.")
+
+            yield (path, full_path)
+
+    import stimela
+
+    stimela_dirs = { p: f for p, f in _create_stimela_dirs() }
+
     for o in observations:
-        download_observation(o)
+        f = download_observation(o, stimela_dirs['input'])
+        stimela.run(['-g', 'h5file={}:str'.format(os.path.split(f)[1]), __stimela_script_path])
