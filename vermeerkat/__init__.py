@@ -65,7 +65,7 @@ def run(args):
 
     def _create_stimela_dirs():
         # Create stimela input and output directories
-        for path in ('input', 'output'):
+        for path in ('input', 'output', 'msdir'):
             full_path = os.path.join(os.getcwd(), path)
 
             if not os.path.exists(full_path):
@@ -83,4 +83,10 @@ def run(args):
 
     for o in observations:
         f = download_observation(o, stimela_dirs['input'])
-        stimela.run(['-g', 'h5file={}:str'.format(os.path.split(f)[1]), __stimela_script_path])
+        h5file = os.path.split(f)[1]
+        basename = os.path.splitext(h5file)[0]
+        msfile = ''.join((basename, '.ms'))
+
+        stimela.run(['-g', 'h5file={}:str'.format(h5file),
+            '-g', 'output_ms={}:str'.format(msfile),
+            __stimela_script_path])

@@ -31,7 +31,10 @@ stimela.register_globals()
 recipe = stimela.Recipe("Imaging Pipeline", ms_dir=MSDIR)
 recipe.add("cab/h5toms",
     "h5toms",
-    {'hdf5files' : [h5file] },
+    {
+        'hdf5files' : [h5file],
+        'output-ms' : output_ms
+    },
     input=INPUT,
     output=OUTPUT)
 
