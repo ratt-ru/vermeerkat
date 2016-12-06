@@ -21,6 +21,7 @@
 import collections
 import itertools
 import os
+import sys
 
 import vermeerkat
 
@@ -95,7 +96,7 @@ def query_recent_observations(solr_url):
     return filter(_observation_filter, res)
 
 
-def download_observation(observation):
+def download_observation(observation, directory):
     """ Download the specified observation """
     import requests
     import progressbar
@@ -116,19 +117,52 @@ def download_observation(observation):
     location = location.replace('/var/kat', 'http://kat-archive.kat.ac.za', 1)
     filename = observation['Filename']
     url = os.path.join(location, filename)
-    r = requests.get(url, stream=True)
 
-    file_size = r.headers.get('Content-Length', None)
-    vermeerkat.log.info('%s %s %s' % (url, file_size, r.status_code))
+    filename = os.path.join(directory, filename)
+    file_exists = os.path.exists(filename) and os.path.isfile(filename)
+    local_file_size = os.path.getsize(filename) if file_exists else 0
+    headers = { "Range" : "bytes={}-".format(local_file_size) }
 
-    f = open(filename, 'wb')
+    r = requests.get(url, headers=headers, stream=True)
+    print r.headers
+
+    # Server doesn't care about range requests and is just
+    # sending the entire file
+    if r.status_code == 200:
+        vermeerkat.log.info("Downloading '{}'")
+        remote_file_size = r.headers.get('Content-Length', None)
+        file_exists = False
+        local_file_size = 0
+    elif r.status_code == 206:
+        if local_file_size > 0:
+            vermeerkat.log.info("'{}' already exists, "
+                "resuming download from {}.".format(
+                    filename, local_file_size))
+
+        # Create a fake range if none exists
+        fake_range = "{}-{}/{}".format(local_file_size, sys.maxint,
+            sys.maxint - local_file_size)
+
+        remote_file_size = r.headers.get('Content-Range', fake_range)
+        remote_file_size = remote_file_size.split('/')[-1]
+    elif r.status_code == 416:
+        vermeerkat.log.info("'{}' already downloaded".format(filename))
+        remote_file_size = local_file_size
+        return filename
+    else:
+        raise ValueError("HTTP Error Code {}".format(r.status_code))
+
+    vermeerkat.log.info('%s %s %s' % (url, remote_file_size, r.status_code))
+
+    f = open(filename, 'ab' if file_exists else 'wb')
     bar = (progressbar.ProgressBar(max_value=progressbar.UnknownLength)
-        if file_size is None else progressbar.ProgressBar(max_value=int(file_size)))
+        if remote_file_size is None else progressbar.ProgressBar(
+            max_value=int(remote_file_size)))
 
     #Download chunks of file and write to disk
     try:
         with f, bar:
-            downloaded = 0
+            downloaded = local_file_size
             for chunk in r.iter_content(chunk_size=ONE_MB):
                 if chunk:
                     f.write(chunk)
@@ -138,3 +172,4 @@ def download_observation(observation):
         pass
         #log.warn("Quitting download on Keyboard Interrupt")
 
+    return filename
