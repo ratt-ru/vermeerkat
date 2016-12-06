@@ -54,14 +54,7 @@ def install_path():
 
 def run(args):
     """ Execute the program """
-
-    from config import configuration
-    from observation import (query_recent_observations,
-        download_observation)
-
-    cfg = configuration(args)
-
-    observations = query_recent_observations(cfg.general.solr_url)
+    import stimela
 
     def _create_stimela_dirs():
         # Create stimela input and output directories
@@ -77,16 +70,14 @@ def run(args):
 
             yield (path, full_path)
 
-    import stimela
 
     stimela_dirs = { p: f for p, f in _create_stimela_dirs() }
 
-    for o in observations:
-        f = download_observation(o, stimela_dirs['input'])
-        h5file = os.path.split(f)[1]
-        basename = os.path.splitext(h5file)[0]
-        msfile = ''.join((basename, '.ms'))
+    # Convert argument list to a string, replacing any single-quotes
+    # with double-quotes to get past stimela's
+    # global variable evaluation logic
+    str_args = str(args).replace("'", '"')
 
-        stimela.run(['-g', 'h5file={}:str'.format(h5file),
-            '-g', 'output_ms={}:str'.format(msfile),
-            __stimela_script_path])
+    # Execute the stimela script
+    stimela.run(['-g', 'args={}:str'.format(str_args),
+        __stimela_script_path])
