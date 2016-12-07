@@ -86,7 +86,7 @@ def query_recent_observations(solr_url):
         duration = solr_result['Duration']
 
         if duration <= 2*ONE_HOUR:
-            vermeerkat.log.log.warn('Ignoring "{}", observation is '
+            vermeerkat.log.warn('Ignoring "{}", observation is '
                 'less than 2 hours "{}s".'.format(observation, duration))
             return False
 
