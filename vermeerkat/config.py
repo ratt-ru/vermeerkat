@@ -37,9 +37,40 @@ def general_section_parser():
 
     return parser
 
+def rfi_mask_section_parser():
+    """ Parsers the aoflagger section """
+    parser = argparse.ArgumentParser("RFI Mask Section")
+
+    parser.add_argument('--rfi-mask-file',
+        default='',
+        help='Filename of the RFI Mask File')
+
+    return parser
+
+def wsclean_section_parser():
+    """ Parses the wsclean section """
+    parser = argparse.ArgumentParser("WSCLEAN Section")
+
+    return parser
+
+def aoflagger_section_parser():
+    """ Parsers the aoflagger section """
+    parser = argparse.ArgumentParser("AOFlagger")
+
+    parser.add_argument('--strategy-file',
+        default='',
+        help="Filename of the AOFlagger Strategy File")
+
+    return parser
+
 # Dictionary of argument parsers for particular sections
 # Keys should correspond to associated sections in the
-_ARGPARSERS = { 'general': general_section_parser }
+_ARGPARSERS = {
+    'general': general_section_parser,
+    'rfimask' : rfi_mask_section_parser,
+    'aoflagger' : aoflagger_section_parser,
+    'wsclean' : wsclean_section_parser,
+}
 
 def configuration(args=None):
     """ Extract """
