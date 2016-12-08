@@ -19,7 +19,6 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import argparse
-import collections
 import ConfigParser
 import itertools
 import os
@@ -38,9 +37,40 @@ def general_section_parser():
 
     return parser
 
+def rfi_mask_section_parser():
+    """ Parsers the aoflagger section """
+    parser = argparse.ArgumentParser("RFI Mask Section")
+
+    parser.add_argument('--rfi-mask-file',
+        default='',
+        help='Filename of the RFI Mask File')
+
+    return parser
+
+def wsclean_section_parser():
+    """ Parses the wsclean section """
+    parser = argparse.ArgumentParser("WSCLEAN Section")
+
+    return parser
+
+def aoflagger_section_parser():
+    """ Parsers the aoflagger section """
+    parser = argparse.ArgumentParser("AOFlagger")
+
+    parser.add_argument('--strategy-file',
+        default='',
+        help="Filename of the AOFlagger Strategy File")
+
+    return parser
+
 # Dictionary of argument parsers for particular sections
 # Keys should correspond to associated sections in the
-_ARGPARSERS = { 'general': general_section_parser }
+_ARGPARSERS = {
+    'general': general_section_parser,
+    'rfimask' : rfi_mask_section_parser,
+    'aoflagger' : aoflagger_section_parser,
+    'wsclean' : wsclean_section_parser,
+}
 
 def configuration(args=None):
     """ Extract """
@@ -106,12 +136,9 @@ def configuration(args=None):
                     "exists for Section '{}'. Options will "
                     "not be validated for this section.".format(cfg_section))
 
-                T = collections.namedtuple('Namespace',
-                    section_defaults.keys())
+                section_args = argparse.Namespace(**section_defaults)
 
-                section_args = T(**section_defaults)
-
-            yield section_args
+            yield section, section_args
 
     # Find the list of sections that should be parsed.
     # Obtained from sections in the config file and sections in
@@ -126,10 +153,6 @@ def configuration(args=None):
     sections = { s: (cfg_sections.get(s, None), argp_sections.get(s, None))
         for s in all_sections }
 
-    # Create a global namespace type that holds argparse
-    # results for each section. Looks like an argparse args Namespace
-    global_namespace = collections.namedtuple('Namespace', all_sections)
-
     # Create the namespace using sections as arguments
-    return global_namespace(*(s for s in _section_args(
-        sections, remaining_args)))
+    return argparse.Namespace(**{s: a for s, a in _section_args(
+        sections, remaining_args)})
