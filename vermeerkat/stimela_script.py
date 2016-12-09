@@ -77,7 +77,7 @@ for o in observations:
     recipe.add("cab/rfimasker", "mask_stuff",
         {
             "msname" : msname,
-            "mask"   : 'rfi_mask.pickle',
+            "mask"   : cfg.rfimask.rfi_mask_file,
         },
         input=INPUT, output=OUTPUT,
         label="mask::maskms")
@@ -86,10 +86,10 @@ for o in observations:
         {
             "msname"    : msname,
             "column"    : "DATA",
-            #"strategy"  : <RFI strategy file>,
+            "strategy"  : cfg.aoflagger.strategy_file,
         },
         input=INPUT, output=OUTPUT,
-        label="autoflag1:: Auto Flagging ms")
+        label="autoflag:: Auto Flagging ms")
 
     recipe.add("cab/wsclean", "wsclean",
         {
@@ -105,4 +105,10 @@ for o in observations:
         input=INPUT, output=OUTPUT,
         label="image::wsclean")
 
-    recipe.run()
+    try:
+        recipe.run(['convert'])
+    except stimela.PipelineException as e:
+        print 'completed {}'.format([c.label for c in e.completed])
+        print 'failed {}'.format(e.failed.label)
+        print 'remaining {}'.format([c.label for c in e.remaining])
+        raise
