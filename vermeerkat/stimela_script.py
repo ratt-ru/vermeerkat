@@ -23,6 +23,7 @@ import os
 import sys
 
 import stimela
+import vermeerkat
 
 from vermeerkat.config import configuration
 from vermeerkat.observation import (query_recent_observations,
@@ -43,8 +44,18 @@ args = ast.literal_eval(args)
 # Load in the configuration
 cfg = configuration(args)
 
+# If a specific HDF5 file is specified, use that to specify
+# the observation query
+if cfg.general.hdf5_file is not None:
+    query = 'Filename:{}'.format(cfg.general.hdf5_file)
+else:
+    query = None
+
 # Find recent observations
-observations = query_recent_observations(cfg.general.solr_url)
+observations = query_recent_observations(cfg.general.solr_url, query)
+
+if len(observations) == 0:
+    vermeerkat.log.warn("No observations matching query string '{}'".format(query))
 
 # Image each observation
 for o in observations:

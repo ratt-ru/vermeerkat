@@ -35,6 +35,9 @@ def general_section_parser():
         default='http://127.0.0.1/solr/core',
         help='URL of the Solr server')
 
+    parser.add_argument('-f', '--hdf5-file',
+        help='Name of the HDF5 file to download')
+
     return parser
 
 def rfi_mask_section_parser():
