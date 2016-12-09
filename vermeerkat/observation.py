@@ -96,9 +96,11 @@ def query_recent_observations(solr_url, query=None):
 
         return True
 
-    # Filter observations
-    return filter(_observation_filter, res)
-
+    # If no query was supplied, filter the observations
+    if query is None:
+        return filter(_observation_filter, res)
+    else:
+        return res
 
 def download_observation(observation, directory):
     """ Download the specified observation """
