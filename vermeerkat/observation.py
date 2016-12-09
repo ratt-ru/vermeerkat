@@ -25,15 +25,7 @@ import sys
 
 import vermeerkat
 
-def query_recent_observations(solr_url):
-    """
-    Find recent telescope observations suitable for imaging
-    """
-    import pysolr
-
-    ONE_MINUTE = 60
-    ONE_HOUR = 60 * ONE_MINUTE
-
+def standard_observation_query():
     # Create a quick field+query type
     fq = collections.namedtuple('field_query', 'field query')
 
@@ -46,7 +38,19 @@ def query_recent_observations(solr_url):
         fq('StartTime', '[NOW-3DAYS TO NOW]')]
 
     # Construct the query
-    search = ' AND '.join('%s:%s' % (fq.field, fq.query) for fq in query_list)
+    return ' AND '.join('%s:%s' % (fq.field, fq.query) for fq in query_list)
+
+def query_recent_observations(solr_url, query=None):
+    """
+    Find recent telescope observations suitable for imaging
+    """
+    import pysolr
+
+    ONE_MINUTE = 60
+    ONE_HOUR = 60 * ONE_MINUTE
+
+    search = query if query is not None else standard_observation_query()
+
 
     vermeerkat.log.info("Querying solr server '%s' "
                         "with query string '%s'." % (solr_url, search))
