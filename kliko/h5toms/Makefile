@@ -7,6 +7,8 @@ DOCKER_REPO=kernsuite/h5toms:$(VERSION)
 
 all: kliko
 
+input/1348904076.h5:
+	curl http://kat-archive.kat.ac.za/archive/data/comm/2012/09/29/1348904076.h5 --output input/1348904076.h5
 
 unzip:
 	tar zxvf blank.ms.tgz
@@ -24,5 +26,5 @@ clean:
 run: build
 	docker run -ti ${DOCKER_REPO}
 
-kliko: build
-	kliko-run ${DOCKER_REPO}
+kliko: build input/1348904076.h5
+	kliko-run ${DOCKER_REPO} --pattern 1348904076.h5
