@@ -17,7 +17,7 @@ sections:
         help_text: regular expression matching work files
   -
     name: parameters
-    description: h5toms paramaters
+    description: aoflagger paramaters
     fields:
       -
         name: strategy
