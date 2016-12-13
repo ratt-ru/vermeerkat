@@ -1,0 +1,24 @@
+schema_version: 3
+name: vermeerkat/autoflagger
+description: A flagger framework that implements several methods to deal with radio-frequency interference or RFI.
+url: https://github.com/ska-sa/vermeerkat
+io: join
+
+sections:
+  -
+    name: input
+    description: input parameters
+    fields:
+      -
+        name: pattern
+        label: work pattern
+        initial: "*.ms"
+        type: str
+        help_text: regular expression matching work files
+  -
+    name: parameters
+    description: h5toms paramaters
+    fields:
+      -
+        name: strategy
+        type: file
