@@ -1,0 +1,33 @@
+schema_version: 3
+name: vermeerkat/h5toms
+description: convert hdf5 to measurement set
+url: https://github.com/ska-sa/vermeerkat
+io: split
+
+sections:
+  -
+    name: input
+    description: input parameters
+    fields:
+      -
+        name: pattern
+        label: input puattern
+        initial: "*.h5"
+        type: str
+        help_text: regular expression matching input files
+  -
+    name: parameters
+    description: h5toms paramaters
+    fields:
+      -
+        name: full_pol
+        label: enable full polarisation
+        type: bool
+        initial: false
+        help_text: Produce a full polarisation MS in CASA canonical order (HH, HV, VH, VV). Default is to produce HH,VV only
+      -
+        name: flagav
+        label:  flag averaged bin
+        initial: false
+        help_text: If a single element in an averaging bin is flagged, flag the averaged bin.
+        type: bool
