@@ -1,0 +1,24 @@
+schema_version: 3
+name: vermeerkat/rfimasker
+description: Tool to apply RFI masks
+url: https://github.com/bennahugo/RFIMasker
+io: join
+
+sections:
+  -
+    name: work
+    description: work parameters
+    fields:
+      -
+        name: pattern
+        label: input puattern
+        initial: "*.ms"
+        type: str
+        help_text: regular expression matching work files
+  -
+    name: parameters
+    description: rfimasker parameters
+    fields:
+      -
+        name: mask
+        type: file
