@@ -1,4 +1,4 @@
-DOCKER_REPO=kliko/wsclean
+DOCKER_REPO=vermeerkat/wsclean:0.1
 
 
 .PHONY: build force-build clean run

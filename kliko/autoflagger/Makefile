@@ -1,5 +1,5 @@
 VERSION=0.1
-DOCKER_REPO=kernsuite/autoflagger:$(VERSION)
+DOCKER_REPO=vermeerkat/autoflagger:$(VERSION)
 
 
 .PHONY: build clean run

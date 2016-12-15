@@ -1,5 +1,5 @@
 VERSION=0.1
-DOCKER_REPO=kernsuite/rfimasker:$(VERSION)
+DOCKER_REPO=vermeerkat/rfimasker:$(VERSION)
 
 
 .PHONY: build clean run

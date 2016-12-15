@@ -1,5 +1,5 @@
 VERSION=0.1
-DOCKER_REPO=kernsuite/h5toms:$(VERSION)
+DOCKER_REPO=vermeerkat/h5toms:$(VERSION)
 
 
 .PHONY: build clean run
