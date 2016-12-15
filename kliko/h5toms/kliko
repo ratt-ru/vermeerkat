@@ -13,15 +13,15 @@ import subprocess
 
 binary = "/usr/bin/h5toms.py"
 
-# changedir so we will write results to kliko output folder
-os.chdir(kliko.output_path)
-
 # validate and parse the kliko arguments
 parameters = validate()
 
 # build list of input files
 pattern = parameters.pop('pattern')
 h5_files = glob(os.path.join(kliko.input_path, pattern))
+
+prefix = parameters.pop('prefix')
+parameters['output-ms'] = kliko.output_path + '/' + prefix + '.ms'
 
 # format the arguments
 args = ["--{}={}".format(k, v) for k, v in parameters.items() if v]

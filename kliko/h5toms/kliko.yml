@@ -6,18 +6,23 @@ io: split
 
 sections:
   -
-    name: input
-    description: input parameters
+    name: io
+    description: input/output parameters
     fields:
       -
         name: pattern
-        label: input puattern
+        label: input match pattern
         initial: "*.h5"
         type: str
         help_text: regular expression matching input files
+      -
+        name: prefix
+        label: output prefix for ms
+        initial: result
+        type: str
   -
     name: parameters
-    description: h5toms paramaters
+    description: h5toms parameters
     fields:
       -
         name: full_pol
