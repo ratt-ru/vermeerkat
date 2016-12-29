@@ -63,7 +63,6 @@ for o in observations:
     h5file = os.path.split(f)[1]
     basename = os.path.splitext(h5file)[0]
     msfile = ''.join((basename, '.ms'))
-    msname = ''.join((basename, '_1284.full_pol.ms'))
 
     recipe = stimela.Recipe("Imaging Pipeline", ms_dir=MSDIR)
     recipe.add("cab/h5toms", "h5toms",
@@ -76,7 +75,7 @@ for o in observations:
 
     recipe.add("cab/rfimasker", "mask_stuff",
         {
-            "msname" : msname,
+            "msname" : msfile,
             "mask"   : cfg.rfimask.rfi_mask_file,
         },
         input=INPUT, output=OUTPUT,
@@ -84,7 +83,7 @@ for o in observations:
 
     recipe.add("cab/autoflagger", "auto_flag_rfi",
         {
-            "msname"    : msname,
+            "msname"    : msfile,
             "column"    : "DATA",
             "strategy"  : cfg.aoflagger.strategy_file,
         },
@@ -93,7 +92,7 @@ for o in observations:
 
     recipe.add("cab/wsclean", "wsclean",
         {
-            "msname"            : msname,
+            "msname"            : msfile,
             "column"            : 'DATA',
             "weight"            : 'briggs',
             "robust"            : 0,
