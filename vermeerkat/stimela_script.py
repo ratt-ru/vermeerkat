@@ -97,21 +97,30 @@ for o in observations:
     gain_cal_candidates = []
     targets = []
     source_name = []
-    for si, source in enumerate(o["KatpointTargets"]):
-        source_string = source.split(",")
-        if len(source_string) != 4:
-            raise RuntimeError("Malformed Solr observation KatpointTargets field")
-        source_name += [source_string[0]]
+    
+    d = katdal.open(INPUT + "/" + h5file)
+    scans = [(scan, 
+              target.name, 
+              target.tags, 
+              target.radec(), 
+              d.timestamps[-1] - d.timestamps[0])
+             for (scan, 
+                  state, 
+                  target) in d.scans() if state == "track"]
 
-        if "bpcal" in source:
+    for si, scan in enumerate(scans):
+        if scan[1] in source_name:
+            continue
+        source_name += [scan[1]]
+        if "bpcal" in scan[2]:
             bandpass_cal_candidates += [si]
-        elif "gaincal" in source:
+        elif "gaincal" in scan[2]:
             gain_cal_candidates += [si]
-        elif "target" in source:
+        elif "target" in scan[2]:
             targets += [si]
         else:
-            print>> sys.stderr, "Not using observed source %s" % source_string[0]
-        
+            vermeerkat.log.warn("Not using observed source %s" % source_string[0])
+
     if len(targets) < 1:
         raise RuntimeError("Observation %s does not have any "
                            "targets" % o["ProductName"])
@@ -121,44 +130,20 @@ for o in observations:
     if len(bandpass_cal_candidates) < 1:
         raise RuntimeError("Observation %s does not have any "
                            "bandpass calibrators" % o["ProductName"])
-
-    def extract_src_coords(sources, definitions):
-        source_coordinates = []
-        for t in targets:
-            vals = re.match(r"^[a-zA-Z0-9_ -]+,"
-                            r"[a-zA-Z0-9_ -]+,"
-                            r"[ ]*(?P<ra>[-+]?[0-9]+:[0-9]+:[0-9]+(?:.[0-9]+)?)?"
-                            r"[ ]+"
-                            r"(?P<decl>[-+]?[0-9]+:[0-9]+:[0-9]+(?:.[0-9]+)?)?"
-                            r"[ ]*,"
-                            r"[a-zA-Z0-9_ -:.!@#$%^&*(){}?;<>+`~\"'|/\\\[\]]+$",
-                            definitions[t])
-            if vals is None or vals.group("ra") is None or vals.group("decl") is None:
-                raise RuntimeError("Malformed Solr observation KatpointTargets field")
-
-            radeg, ramins, rasecs = [float(x) for x in vals.group("ra").split(":")]
-            decldeg, declmins, declsecs = [float(x) for x in vals.group("decl").split(":")]
-            source_coordinates += [(radeg + ramins / 60.0 + rasecs / 3600.0, 
-                                    decldeg + declmins / 60.0 + declsecs / 3600.0)]
-        return source_coordinates
-    target_coordinates = extract_src_coords(targets, o["KatpointTargets"])
-    gaincal_coordinates = extract_src_coords(gain_cal_candidates, o["KatpointTargets"])
-    
+       
     # select gaincal candidate closest to the centre of the cluster of targets
-    mean_target_position = np.mean(np.array(target_coordinates), axis=1)
+    target_coordinates = [scans[ti][3] for ti, t in enumerate(targets)]
+    gaincal_coordinates = [scans[gi][3] for gi, g in enumerate(gain_cal_candidates)]
+    mean_target_position = np.mean(np.array(target_coordinates), axis=0)
     lmdistances = np.sum((np.array(gaincal_coordinates) - mean_target_position)**2,
                          axis=0)
     gain_cal = np.argmin(lmdistances)
-
-    # don't use the gain calibrator for a bandpass calibrator
+   
+    # never use the gain calibrator for a bandpass calibrator
     bandpass_cal_candidates = [x for x in bandpass_cal_candidates if x != gain_cal] 
- 
-    d = katdal.open(INPUT + "/" + h5file)
-    scans = [(scan, state, target.name, d.timestamps[-1] - d. timestamps[0]) 
-             for (scan, state, target) in d.scans() if state == "track"]
     bp_cand_obs_len = [reduce((lambda x, y: x + y),
-                              list(map((lambda q: q[3]), 
-                                   filter((lambda z: z[2] == source_name[cand]),
+                              list(map((lambda q: q[4]), 
+                                   filter((lambda z: z[1] == source_name[cand]),
                                           scans))))
                        for cand in bandpass_cal_candidates]
     bandpass_cal = bandpass_cal_candidates[np.array(np.argmax(bp_cand_obs_len))] 
@@ -176,7 +161,6 @@ for o in observations:
     vermeerkat.log.info("Will use aoflagger strategy: %s" % cfg.aoflagger.strategy_file)
     vermeerkat.log.info("Will use RFI mask: %s" % cfg.rfimask.rfi_mask_file)
 
-    raise RuntimeError("Done")
     # All good to go fire up the pipeline
     recipe = stimela.Recipe("Imaging Pipeline", ms_dir=MSDIR)
     
@@ -313,7 +297,7 @@ for o in observations:
     recipe.add("cab/casa_applycal", "apply_calibration", 
         {
             "msname"        :   msfile,
-            "field"         :   ",".join([str(x) for x in targets]),
+            "field"         :   ",".join([str(x) for x in (targets + [bandpass_cal, gain_cal])]),
             "gaintable"     :   [phasecal_table, bpasscal_table, fluxcal_table],
             "gainfield"     :   [bandpass_cal, bandpass_cal, gain_cal],
             "spwmap"        :   [[], [], []],
@@ -346,8 +330,8 @@ for o in observations:
                 "cellsize"          : angular_resolution,
                 "clean_iterations"  : 1000,
                 "mgain"             : 0.9,
-                #"channelsout"       : im_numchans,
-                #"joinchannels"      : True,
+                "channelsout"       : im_numchans,
+                "joinchannels"      : True,
                 "field"             : str(ti),
                 "name"              : imname,
             },
@@ -368,7 +352,6 @@ for o in observations:
                    "applycal".split() + 
                    ["image_%d" % ti for ti in targets])
 
-        #recipe.run(['convert'])
     except stimela.PipelineException as e:
         print 'completed {}'.format([c.label for c in e.completed])
         print 'failed {}'.format(e.failed.label)
