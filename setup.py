@@ -75,6 +75,8 @@ setup(name=PACKAGE_NAME,
         'pysolr >= 3.6.0',
         'requests >= 2.12.1',
         'stimela >= 0.2.0', # Force install of master branch
+        'katdal >= 0.7',
+        'numpy >= 1.11.2'
     ],
     dependency_links=[
         'https://github.com/SpheMakh/Stimela/tarball/master#egg=stimela-0.2.0'

@@ -21,9 +21,12 @@
 import ast
 import os
 import sys
-
+import numpy as np
+import re
 import stimela
 import vermeerkat
+import katdal
+from functools import reduce
 
 from vermeerkat.config import configuration
 from vermeerkat.observation import (query_recent_observations,
@@ -64,15 +67,130 @@ for o in observations:
     basename = os.path.splitext(h5file)[0]
     msfile = ''.join((basename, '.ms'))
 
+    # Calibrator tables
+    phasecal_table = "%s.G0" % (basename)
+    ampcal_table = "%s.G1" % (basename)
+    fluxcal_table = "%s.fluxscale" % (basename)
+    bpasscal_table = "%s.B0" % (basename)
+    
+    #RFI flagging strategies and inputs
+    rfi_mask_file = "rfi_mask.pickle"
+    strategy_file = "first_pass_meerkat_ar1.rfis"
+
+    #Observation properties
+    refant = o["RefAntenna"]
+    correlator_integration_time = o["DumpPeriod"]
+    freq_0 = o["CenterFrequency"]
+    nchans = o["NumFreqChannels"]
+    chan_bandwidth = o["ChannelWidth"]
+    lambda_max = (299792458.0 / (freq_0 + (nchans // 2) * chan_bandwidth)) 
+    telescope_max_baseline = 8e4 
+    angular_resolution = np.rad2deg(lambda_max / 
+                                    telescope_max_baseline * 
+                                    1.220) * 3600 #nyquest rate in arcsecs
+    fov = 3 * 3600 # 3 degrees (ample to cover MeerKAT primary beam in L-Band)
+    im_npix = fov / angular_resolution
+    bw_per_image_slice = 42.8e6 
+    im_numchans = int(np.ceil(o["ChannelWidth"] * nchans / bw_per_image_slice))
+
+    bandpass_cal_candidates = []
+    gain_cal_candidates = []
+    targets = []
+    source_name = []
+    for si, source in enumerate(o["KatpointTargets"]):
+        source_string = source.split(",")
+        if len(source_string) != 4:
+            raise RuntimeError("Malformed Solr observation KatpointTargets field")
+        source_name += [source_string[0]]
+
+        if "bpcal" in source:
+            bandpass_cal_candidates += [si]
+        elif "gaincal" in source:
+            gain_cal_candidates += [si]
+        elif "target" in source:
+            targets += [si]
+        else:
+            print>> sys.stderr, "Not using observed source %s" % source_string[0]
+        
+    if len(targets) < 1:
+        raise RuntimeError("Observation %s does not have any "
+                           "targets" % o["ProductName"])
+    if len(gain_cal_candidates) < 1:
+        raise RuntimeError("Observation %s does not have any "
+                           "gain calibrators" % o["ProductName"])
+    if len(bandpass_cal_candidates) < 1:
+        raise RuntimeError("Observation %s does not have any "
+                           "bandpass calibrators" % o["ProductName"])
+
+    def extract_src_coords(sources, definitions):
+        source_coordinates = []
+        for t in targets:
+            vals = re.match(r"^[a-zA-Z0-9_ -]+,"
+                            r"[a-zA-Z0-9_ -]+,"
+                            r"[ ]*(?P<ra>[-+]?[0-9]+:[0-9]+:[0-9]+(?:.[0-9]+)?)?"
+                            r"[ ]+"
+                            r"(?P<decl>[-+]?[0-9]+:[0-9]+:[0-9]+(?:.[0-9]+)?)?"
+                            r"[ ]*,"
+                            r"[a-zA-Z0-9_ -:.!@#$%^&*(){}?;<>+`~\"'|/\\\[\]]+$",
+                            definitions[t])
+            if vals is None or vals.group("ra") is None or vals.group("decl") is None:
+                raise RuntimeError("Malformed Solr observation KatpointTargets field")
+
+            radeg, ramins, rasecs = [float(x) for x in vals.group("ra").split(":")]
+            decldeg, declmins, declsecs = [float(x) for x in vals.group("decl").split(":")]
+            source_coordinates += [(radeg + ramins / 60.0 + rasecs / 3600.0, 
+                                    decldeg + declmins / 60.0 + declsecs / 3600.0)]
+        return source_coordinates
+    target_coordinates = extract_src_coords(targets, o["KatpointTargets"])
+    gaincal_coordinates = extract_src_coords(gain_cal_candidates, o["KatpointTargets"])
+    
+    # select gaincal candidate closest to the centre of the cluster of targets
+    mean_target_position = np.mean(np.array(target_coordinates), axis=1)
+    lmdistances = np.sum((np.array(gaincal_coordinates) - mean_target_position)**2,
+                         axis=0)
+    gain_cal = np.argmin(lmdistances)
+
+    # don't use the gain calibrator for a bandpass calibrator
+    bandpass_cal_candidates = [x for x in bandpass_cal_candidates if x != gain_cal] 
+ 
+    d = katdal.open(INPUT + "/" + h5file)
+    scans = [(scan, state, target.name, d.timestamps[-1] - d. timestamps[0]) 
+             for (scan, state, target) in d.scans() if state == "track"]
+    bp_cand_obs_len = [reduce((lambda x, y: x + y),
+                              list(map((lambda q: q[3]), 
+                                   filter((lambda z: z[2] == source_name[cand]),
+                                          scans))))
+                       for cand in bandpass_cal_candidates]
+    bandpass_cal = bandpass_cal_candidates[np.array(np.argmax(bp_cand_obs_len))] 
+
+    vermeerkat.log.info("Will use '%s' (%d) as a gain calibrator" % 
+        (source_name[gain_cal], gain_cal))
+    vermeerkat.log.info("Will use '%s' (%d) as a bandpass calibrator (total observation time: %.2f mins)" %
+        (source_name[bandpass_cal], 
+         bandpass_cal,
+         bp_cand_obs_len[bandpass_cal_candidates.index(bandpass_cal)] / 60.0))
+    vermeerkat.log.info("Will image the following targets: '%s' (%s)" %
+        (",".join([source_name[t] for t in targets]), 
+         ",".join([str(t) for t in targets])))
+    vermeerkat.log.info("Will write ms file to %s" % msfile)
+    vermeerkat.log.info("Will use aoflagger strategy: %s" % cfg.aoflagger.strategy_file)
+    vermeerkat.log.info("Will use RFI mask: %s" % cfg.rfimask.rfi_mask_file)
+
+    raise RuntimeError("Done")
+    # All good to go fire up the pipeline
     recipe = stimela.Recipe("Imaging Pipeline", ms_dir=MSDIR)
+    
+    # Convert
     recipe.add("cab/h5toms", "h5toms",
         {
-            'hdf5files' : [h5file],
-            'output-ms' : msfile
+            'hdf5files'  : [h5file],
+            'output-ms'  : msfile,
+            'full_pol'   : True,
         },
         input=INPUT, output=OUTPUT,
         label="convert::h5toms")
 
+    # RFI and bad channel flagging
     recipe.add("cab/rfimasker", "mask_stuff",
         {
             "msname" : msfile,
@@ -89,23 +207,168 @@ for o in observations:
         },
         input=INPUT, output=OUTPUT,
         label="autoflag:: Auto Flagging ms")
-
-    recipe.add("cab/wsclean", "wsclean",
+    
+    recipe.add("cab/casa_flagdata", "flag_bad_start_channels",
         {
-            "msname"            : msfile,
-            "column"            : 'DATA',
-            "weight"            : 'briggs',
-            "robust"            : 0,
-            "npix"              : 4096,
-            "cellsize"          : 1,
-            "clean_iterations"  : 1000,
-            "mgain"             : 0.9,
+            "msname"    :   msfile,
+            "mode"      :   "manual",
+            "field"     :   '',
+            "spw"       :   '0:0~109',
+            "autocorr"  :   True,
         },
-        input=INPUT, output=OUTPUT,
-        label="image::wsclean")
+    	input=OUTPUT, output=OUTPUT,
+        label="flag_bandstart:: Flag start of band")
+
+    recipe.add("cab/casa_flagdata", "flag_bad_end_channels",
+        {
+            "msname"    :   msfile,
+            "mode"      :   "manual",
+            "field"     :   '',
+            "spw"       :   '0:3986~4095',
+            "autocorr"  :   True,
+        },
+    	input=OUTPUT, output=OUTPUT,
+        label="flag_bandend:: Flag end of band")
+    
+    # 1GC Calibration
+    recipe.add("cab/casa_setjy", "init_flux_scaling",
+        {
+            "msname"        :   msfile,
+            "field"         :   str(bandpass_cal),
+            "standard"      :   'manual',
+            # TODO: we need to add a standard model of all calibrators to casa
+            # and rmove this manual stopgap
+            "fluxdensity"   :   24.5372,
+            "spix"          :   -1.02239,
+            "reffreq"       :   '900MHz',
+            "usescratch"    :   False,
+            "scalebychan"   :   True,
+            "spw"           :   '',
+        },
+    	input=OUTPUT, output=OUTPUT,
+        label="setjy:: Initial flux density scaling")
+
+    recipe.add("cab/casa_gaincal", "init_phase_cal",
+        {
+            "msname"        :   msfile,
+            "caltable"      :   phasecal_table,
+            "field"         :   str(bandpass_cal),
+            "refant"        :   refant,
+            "calmode"       :   'p',
+            "solint"        :   '12s',
+            "minsnr"        :   3,
+        },
+    	input=OUTPUT, output=OUTPUT,
+        label="phase0:: Initial phase calibration")
+
+
+    recipe.add("cab/casa_bandpass", "bandpass_cal",
+        {   
+            "msname"        :   msfile, 
+            "caltable"      :   bpasscal_table,
+            "field"         :   str(bandpass_cal),
+            "spw"           :   '',
+            "refant"        :   refant,
+            "combine"       :   'scan',
+            "solint"        :   '5min',
+            "bandtype"      :   'B',
+            "minblperant"   :   1,
+            "gaintable"     :   [phasecal_table],
+        },
+    	input=OUTPUT, output=OUTPUT,
+        label="bandpass:: First bandpass calibration")
+
+
+    recipe.add("cab/casa_gaincal", "main_gain_calibration",
+        {
+            "msname"       :   msfile,
+            "caltable"     :   ampcal_table,
+            "field"        :   ",".join([str(x) for x in [bandpass_cal, gain_cal]]),
+            "spw"          :   '',
+            "solint"       :   'inf',
+            "refant"       :   refant,
+            "gaintype"     :   'G',
+            "calmode"      :   'ap',
+            "solnorm"      :   False,
+            "gaintable"    :   [phasecal_table,
+                                bpasscal_table],
+            "interp"       :   ['linear','linear','nearest'],
+        },
+    	input=OUTPUT, output=OUTPUT,
+        label="gaincal:: Gain calibration")
+
+
+    recipe.add("cab/casa_fluxscale", "casa_fluxscale",
+        {
+            "msname"        :   msfile,
+            "caltable"      :   ampcal_table,
+            "fluxtable"     :   fluxcal_table,
+            "reference"     :   [str(bandpass_cal)],
+            "transfer"      :   [str(gain_cal)],
+            "incremental"   :   False,
+        },
+    	input=OUTPUT, output=OUTPUT,
+        label="fluxscale:: Setting Fluxscale")
+
+    recipe.add("cab/casa_applycal", "apply_calibration", 
+        {
+            "msname"        :   msfile,
+            "field"         :   ",".join([str(x) for x in targets]),
+            "gaintable"     :   [phasecal_table, bpasscal_table, fluxcal_table],
+            "gainfield"     :   [bandpass_cal, bandpass_cal, gain_cal],
+            "spwmap"        :   [[], [], []],
+            "parang"        :   True,
+        },
+    	input=OUTPUT, output=OUTPUT,
+        label="applycal:: Apply calibration solutions to target")
+
+    # # this wastes disk space... who cares if the calibrators are in there or not
+    # recipe.add("cab/casa_split", "split_calibrated_target_data",
+    #     {
+    #         "msname"        :   msname,
+    #         "output_msname" :   msname[:-3]+"_deep2.ms",
+    #         "field"         :   target,
+    #     },
+    # input=INPUT, output=OUTPUT,
+    # label="split_target:: Split calibrated target data")
+
+
+    # imaging
+    for ti in targets:
+        imname = basename + "_" + source_name[ti]
+        recipe.add("cab/wsclean", "wsclean_%d" % ti,
+            {
+                "msname"            : msfile,
+                "column"            : 'CORRECTED_DATA',
+                "weight"            : 'briggs',
+                "robust"            : 0,
+                "npix"              : im_npix,
+                "cellsize"          : angular_resolution,
+                "clean_iterations"  : 1000,
+                "mgain"             : 0.9,
+                #"channelsout"       : im_numchans,
+                #"joinchannels"      : True,
+                "field"             : str(ti),
+                "name"              : imname,
+            },
+            input=OUTPUT, output=OUTPUT,
+            label="image_%d::wsclean" % ti)
 
     try:
-        recipe.run(['convert'])
+        recipe.run("convert "
+                   "mask "
+                   "autoflag "
+                   "flag_bandstart "
+                   "flag_bandend "
+                   "setjy "
+                   "phase0 "
+                   "bandpass "
+                   "gaincal "
+                   "fluxscale "
+                   "applycal".split() + 
+                   ["image_%d" % ti for ti in targets])
+
+        #recipe.run(['convert'])
     except stimela.PipelineException as e:
         print 'completed {}'.format([c.label for c in e.completed])
         print 'failed {}'.format(e.failed.label)
