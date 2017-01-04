@@ -80,6 +80,7 @@ for o in observations:
     #Observation properties
     refant = o["RefAntenna"]
     correlator_integration_time = o["DumpPeriod"]
+    gain_sol_int = str(correlator_integration_time * 3) + "s"
     freq_0 = o["CenterFrequency"]
     nchans = o["NumFreqChannels"]
     chan_bandwidth = o["ChannelWidth"]
@@ -146,14 +147,21 @@ for o in observations:
                                    filter((lambda z: z[1] == source_name[cand]),
                                           scans))))
                        for cand in bandpass_cal_candidates]
-    bandpass_cal = bandpass_cal_candidates[np.array(np.argmax(bp_cand_obs_len))] 
+    bandpass_cal = bandpass_cal_candidates[np.argmax(bp_cand_obs_len)] 
+    bandpass_scan_times = [min(list(map((lambda q: q[4]),
+                               filter((lambda z: z[1] == source_name[cand]),
+                                      scans))))
+                           for cand in bandpass_cal_candidates]
+    bpcal_sol_int = bandpass_scan_times[bandpass_cal_candidates.index(bandpass_cal)]
 
     vermeerkat.log.info("Will use '%s' (%d) as a gain calibrator" % 
         (source_name[gain_cal], gain_cal))
-    vermeerkat.log.info("Will use '%s' (%d) as a bandpass calibrator (total observation time: %.2f mins)" %
+    vermeerkat.log.info("Will use '%s' (%d) as a bandpass calibrator (total "
+        "observation time: %.2f mins, minimum scan time: %.2f mins)" %
         (source_name[bandpass_cal], 
          bandpass_cal,
-         bp_cand_obs_len[bandpass_cal_candidates.index(bandpass_cal)] / 60.0))
+         bp_cand_obs_len[bandpass_cal_candidates.index(bandpass_cal)] / 60.0,
+         bpcal_sol_int / 60.0))
     vermeerkat.log.info("Will image the following targets: '%s' (%s)" %
         (",".join([source_name[t] for t in targets]), 
          ",".join([str(t) for t in targets])))
@@ -219,12 +227,12 @@ for o in observations:
         {
             "msname"        :   msfile,
             "field"         :   str(bandpass_cal),
-            "standard"      :   'manual',
-            # TODO: we need to add a standard model of all calibrators to casa
-            # and rmove this manual stopgap
-            "fluxdensity"   :   24.5372,
-            "spix"          :   -1.02239,
-            "reffreq"       :   '900MHz',
+            # Relies on a custom casa docker image with
+            # southern calibrators
+            "standard"      :   'Perley-Butler 2013',
+            #"fluxdensity"   :   24.5372,
+            #"spix"          :   -1.02239,
+            #"reffreq"       :   '900MHz',
             "usescratch"    :   False,
             "scalebychan"   :   True,
             "spw"           :   '',
@@ -239,7 +247,7 @@ for o in observations:
             "field"         :   str(bandpass_cal),
             "refant"        :   refant,
             "calmode"       :   'p',
-            "solint"        :   '12s',
+            "solint"        :   gain_sol_int,
             "minsnr"        :   3,
         },
     	input=OUTPUT, output=OUTPUT,
@@ -254,7 +262,7 @@ for o in observations:
             "spw"           :   '',
             "refant"        :   refant,
             "combine"       :   'scan',
-            "solint"        :   '5min',
+            "solint"        :   str(bpcal_sol_int) + "s",
             "bandtype"      :   'B',
             "minblperant"   :   1,
             "gaintable"     :   [phasecal_table],
@@ -269,7 +277,7 @@ for o in observations:
             "caltable"     :   ampcal_table,
             "field"        :   ",".join([str(x) for x in [bandpass_cal, gain_cal]]),
             "spw"          :   '',
-            "solint"       :   'inf',
+            "solint"       :   gain_sol_int,
             "refant"       :   refant,
             "gaintype"     :   'G',
             "calmode"      :   'ap',
