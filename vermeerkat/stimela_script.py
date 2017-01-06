@@ -186,7 +186,7 @@ for o in observations:
     vermeerkat.log.info("Will use secondpass aoflagger strategy: %s" % cfg.aoflagger.secondpass_strategy_file)
     vermeerkat.log.info("Will use RFI mask: %s" % cfg.rfimask.rfi_mask_file)
     vermeerkat.log.info("Correlator integration interval recorded as: %.2f secs" % correlator_integration_time)
-    vermeerkat.log.info("MFS maps will contain %.3f Mhz per slice" % bw_per_image_slice)
+    vermeerkat.log.info("MFS maps will contain %.3f Mhz per slice" % (bw_per_image_slice / 1e6))
     vermeerkat.log.info("Maps will cover %.3f square degrees at angular resolution %.3f asec" % 
         (fov / 3600.0, angular_resolution))
     vermeerkat.log.warn("Assuming maximum baseline is %.2f meters" % telescope_max_baseline) 
