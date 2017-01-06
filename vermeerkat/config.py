@@ -60,10 +60,12 @@ def aoflagger_section_parser():
     """ Parsers the aoflagger section """
     parser = argparse.ArgumentParser("AOFlagger")
 
-    parser.add_argument('--strategy-file',
+    parser.add_argument('--firstpass-strategy-file',
         default='',
-        help="Filename of the AOFlagger Strategy File")
-
+        help="Filename of the AOFlagger Strategy File used for first pass RFI flagging (pre-cross-cal)")
+    parser.add_argument('--secondpass-strategy-file',
+        default='',
+        help="Filename of the AOFlagger Strategy File user for second pass RFI flagging (post-cross-cal)")
     return parser
 
 # Dictionary of argument parsers for particular sections

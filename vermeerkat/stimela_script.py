@@ -73,10 +73,6 @@ for o in observations:
     fluxcal_table = "%s.fluxscale" % (basename)
     bpasscal_table = "%s.B0" % (basename)
     
-    #RFI flagging strategies and inputs
-    rfi_mask_file = "rfi_mask.pickle"
-    strategy_file = "first_pass_meerkat_ar1.rfis"
-
     #Observation properties
     refant = o["RefAntenna"]
     correlator_integration_time = o["DumpPeriod"]
@@ -153,6 +149,26 @@ for o in observations:
                                       scans))))
                            for cand in bandpass_cal_candidates]
     bpcal_sol_int = bandpass_scan_times[bandpass_cal_candidates.index(bandpass_cal)]
+    
+    # compute the observation time spent on targets:
+    target_scan_times = [reduce((lambda x, y: x + y),
+                                list(map((lambda q: q[4]),
+                                     filter((lambda z: z[1] == source_name[t]),
+                                            scans))))
+                         for t in targets]
+
+
+    # print out some useful statistics:
+    vermeerkat.log.info("The following targets were observed:")
+    for ti, t in enumerate(targets):
+        obs_hr = int(np.floor(target_scan_times[ti] / 3600.0))
+        obs_min = int(np.floor((target_scan_times[ti] - obs_hr * 3600.0) / 60.0))
+        obs_sec = target_scan_times[ti] - obs_hr * 3600.0 - obs_min * 60.0
+        vermeerkat.log.info("\t %s - total observation time %d h %d mins %.2f secs" %
+            (source_name[t], 
+             obs_hr,
+             obs_min,
+             obs_sec))
 
     vermeerkat.log.info("Will use '%s' (%d) as a gain calibrator" % 
         (source_name[gain_cal], gain_cal))
@@ -166,8 +182,17 @@ for o in observations:
         (",".join([source_name[t] for t in targets]), 
          ",".join([str(t) for t in targets])))
     vermeerkat.log.info("Will write ms file to %s" % msfile)
-    vermeerkat.log.info("Will use aoflagger strategy: %s" % cfg.aoflagger.strategy_file)
+    vermeerkat.log.info("Will use firstpass aoflagger strategy: %s" % cfg.aoflagger.firstpass_strategy_file)
+    vermeerkat.log.info("Will use secondpass aoflagger strategy: %s" % cfg.aoflagger.secondpass_strategy_file)
     vermeerkat.log.info("Will use RFI mask: %s" % cfg.rfimask.rfi_mask_file)
+    vermeerkat.log.info("Correlator integration interval recorded as: %.2f secs" % correlator_integration_time)
+    vermeerkat.log.info("MFS maps will contain %.3f Mhz per slice" % bw_per_image_slice)
+    vermeerkat.log.info("Maps will cover %.3f square degrees at angular resolution %.3f asec" % 
+        (fov / 3600.0, angular_resolution))
+    vermeerkat.log.warn("Assuming maximum baseline is %.2f meters" % telescope_max_baseline) 
+    vermeerkat.log.info("Will use '%s' as reference antenna" % refant)
+    vermeerkat.log.info("Observed band covers %.2f MHz +/- %.2f MHz averaged into %d channels" % 
+        (freq_0 / 1e6, (nchans // 2) * chan_bandwidth / 1e6, nchans))
 
     # All good to go fire up the pipeline
     recipe = stimela.Recipe("Imaging Pipeline", ms_dir=MSDIR)
@@ -195,7 +220,7 @@ for o in observations:
         {
             "msname"    : msfile,
             "column"    : "DATA",
-            "strategy"  : cfg.aoflagger.strategy_file,
+            "strategy"  : cfg.aoflagger.firstpass_strategy_file,
         },
         input=INPUT, output=OUTPUT,
         label="autoflag:: Auto Flagging ms")
@@ -216,7 +241,7 @@ for o in observations:
             "msname"    :   msfile,
             "mode"      :   "manual",
             "field"     :   '',
-            "spw"       :   '0:3986~4095',
+            "spw"       :   '0:3860~4095',
             "autocorr"  :   True,
         },
     	input=OUTPUT, output=OUTPUT,
@@ -265,6 +290,7 @@ for o in observations:
             "solint"        :   str(bpcal_sol_int) + "s",
             "bandtype"      :   'B',
             "minblperant"   :   1,
+            "minsnr"        :   3,
             "gaintable"     :   [phasecal_table],
         },
     	input=OUTPUT, output=OUTPUT,
@@ -314,7 +340,18 @@ for o in observations:
     	input=OUTPUT, output=OUTPUT,
         label="applycal:: Apply calibration solutions to target")
 
+    recipe.add("cab/autoflagger", "auto_flag_rfi_corrected_vis",
+        {
+            "msname"    : msfile,
+            "column"    : "CORRECTED_DATA",
+            "strategy"  : cfg.aoflagger.secondpass_strategy_file,
+        },
+        input=INPUT, output=OUTPUT,
+        label="autoflag_corrected_vis:: Auto Flagging calibrated visibilities")
+
     # # this wastes disk space... who cares if the calibrators are in there or not
+    # # it's actually very useful to keep them and inspect their solutions - 
+    # # DO NOT ADD THIS STEP
     # recipe.add("cab/casa_split", "split_calibrated_target_data",
     #     {
     #         "msname"        :   msname,
@@ -357,7 +394,8 @@ for o in observations:
                    "bandpass "
                    "gaincal "
                    "fluxscale "
-                   "applycal".split() + 
+                   "applycal "
+                   "autoflag_corrected_vis".split() + 
                    ["image_%d" % ti for ti in targets])
 
     except stimela.PipelineException as e:
