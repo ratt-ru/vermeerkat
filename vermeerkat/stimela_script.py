@@ -108,15 +108,16 @@ for o in observations:
     for si, scan in enumerate(scans):
         if scan[1] in source_name:
             continue
-        source_name += [scan[1]]
         if "bpcal" in scan[2]:
-            bandpass_cal_candidates += [si]
-        elif "gaincal" in scan[2]:
-            gain_cal_candidates += [si]
+            bandpass_cal_candidates += [len(source_name)]
+        elif "gaincal" in scan[2]: 
+            gain_cal_candidates += [len(source_name)]
         elif "target" in scan[2]:
-            targets += [si]
+            targets += [len(source_name)]
         else:
             vermeerkat.log.warn("Not using observed source %s" % source_string[0])
+            continue
+        source_name += [scan[1]]
 
     if len(targets) < 1:
         raise RuntimeError("Observation %s does not have any "
@@ -186,7 +187,7 @@ for o in observations:
     vermeerkat.log.info("Will use secondpass aoflagger strategy: %s" % cfg.aoflagger.secondpass_strategy_file)
     vermeerkat.log.info("Will use RFI mask: %s" % cfg.rfimask.rfi_mask_file)
     vermeerkat.log.info("Correlator integration interval recorded as: %.2f secs" % correlator_integration_time)
-    vermeerkat.log.info("MFS maps will contain %.3f Mhz per slice" % (bw_per_image_slice / 1e6))
+    vermeerkat.log.info("MFS maps will contain %.3f MHz per slice" % (bw_per_image_slice / 1e6))
     vermeerkat.log.info("Maps will cover %.3f square degrees at angular resolution %.3f asec" % 
         (fov / 3600.0, angular_resolution))
     vermeerkat.log.warn("Assuming maximum baseline is %.2f meters" % telescope_max_baseline) 
