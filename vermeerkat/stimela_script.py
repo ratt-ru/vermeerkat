@@ -383,6 +383,44 @@ for o in observations:
             input=OUTPUT, output=OUTPUT,
             label="image_%d::wsclean" % ti)
 
+    # Diagnostic only: image bandpass
+    recipe.add("cab/wsclean", "wsclean_bandpass",
+        {
+            "msname"            : msfile,
+            "column"            : 'CORRECTED_DATA',
+            "weight"            : 'briggs',
+            "robust"            : 0,
+            "npix"              : im_npix / 5, # don't need the full FOV
+            "cellsize"          : angular_resolution,
+            "clean_iterations"  : 10000,
+            "mgain"             : 0.9,
+            "channelsout"       : im_numchans,
+            "joinchannels"      : True,
+            "field"             : str(bandpass_cal),
+            "name"              : basename + "_bp_" + source_name[bandpass_cal],
+        },
+        input=OUTPUT, output=OUTPUT,
+        label="image_bandpass::wsclean")
+
+    # Diagnostic only: image gaincal
+    recipe.add("cab/wsclean", "wsclean_gain",
+        {
+            "msname"            : msfile,
+            "column"            : 'CORRECTED_DATA',
+            "weight"            : 'briggs',
+            "robust"            : 0,
+            "npix"              : im_npix / 5, # don't need the full FOV
+            "cellsize"          : angular_resolution,
+            "clean_iterations"  : 10000,
+            "mgain"             : 0.9,
+            "channelsout"       : im_numchans,
+            "joinchannels"      : True,
+            "field"             : str(gain_cal),
+            "name"              : basename + "_gc_" + source_name[gain_cal],
+        },
+        input=OUTPUT, output=OUTPUT,
+        label="image_gain::wsclean")
+
     try:
         recipe.run("convert "
                    "mask "
@@ -396,7 +434,8 @@ for o in observations:
                    "fluxscale "
                    "applycal "
                    "autoflag_corrected_vis".split() + 
-                   ["image_%d" % ti for ti in targets])
+                   ["image_%d" % ti for ti in targets] +
+                   ["image_bandpass", "image_gain"])
 
     except stimela.PipelineException as e:
         print 'completed {}'.format([c.label for c in e.completed])
