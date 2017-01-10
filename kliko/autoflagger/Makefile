@@ -22,5 +22,8 @@ clean:
 run: build
 	docker run -ti ${DOCKER_REPO}
 
-kliko: build
-	kliko-run ${DOCKER_REPO}
+first_pass_meerkat_ar1.rfis:
+	tar zxvf first_pass_meerkat_ar1.rfis.tgz
+
+kliko: build first_pass_meerkat_ar1.rfis
+	kliko-run ${DOCKER_REPO} --strategy first_pass_meerkat_ar1.rfis
