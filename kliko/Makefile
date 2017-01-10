@@ -1,6 +1,6 @@
-.PHONY: autoflagger h5toms wsclean rfimasker
+.PHONY: autoflagger h5toms wsclean rfimasker downobs
 
-all: autoflagger h5toms rfimasker wsclean
+all: autoflagger h5toms rfimasker wsclean downobs
 
 autoflagger:
 	$(MAKE) -C autoflagger build
@@ -13,3 +13,6 @@ rfimasker:
 
 wsclean:
 	$(MAKE) -C wsclean build
+
+downobs:
+	$(MAKE) -C downobs build
