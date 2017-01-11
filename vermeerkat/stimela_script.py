@@ -621,5 +621,5 @@ for o in observations:
     except stimela.PipelineException as e:
         print 'completed {}'.format([c.label for c in e.completed])
         print 'failed {}'.format(e.failed.label)
-        print 'remaining {}'.format([c.label for c in eing])
+        print 'remaining {}'.format([c.label for c in e.remaining])
         raise
