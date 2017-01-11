@@ -1,2 +1,1 @@
-kliko
-luigi
+kliko[luigi]==0.8

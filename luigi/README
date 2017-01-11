@@ -1,0 +1,29 @@
+Usage
+=====
+
+Step 1  - Install dependencies
+------------------------------
+
+# first install docker and python-virtualenv
+
+$ virtualenv .virtualenv   # note that we also support python3
+$ source .virtualenv/bin/activate
+$ pip install -r requirements.txt
+
+Step 2 - Build containers
+-------------------------
+
+$ cd containers
+$ make
+$ cd ..
+
+Step 3 - Run it!
+----------------
+
+$ make
+
+this will set up all the required files. You can also run luigi manually:
+
+$ luigi --module vermeertasks --logging-conf-file logging.conf WscleanTask 
+
+Make sure vermeertasks.py is in your PYTHONPATH (like PYTHONPATH=.)
