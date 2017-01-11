@@ -22,12 +22,8 @@ parameters = validate()
 pattern = parameters.pop('pattern')
 ms_files = glob(os.path.join(kliko.work_path, pattern))
 
-# workaround to prepend param path to parameter file
-if 'strategy' in parameters:
-    parameters['strategy'] = os.path.join(kliko.param_files, 'strategy')
-
 # format the arguments
-args =  list(chain(["-" + k, v] for k, v in parameters.items() if v))[0]
+args = list(chain(*[["-" + k, v] for k, v in parameters.items() if v]))
 
 # combine
 cmd = [binary] + args + ms_files

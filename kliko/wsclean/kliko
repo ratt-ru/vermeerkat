@@ -19,12 +19,14 @@ binary = "/usr/bin/wsclean"
 # validate and parse the kliko arguments
 parameters = validate()
 
+parameters['datacolumn'] = 'DATA'
+
 # build list of input files
 pattern = parameters.pop('pattern')
 ms_files = glob(os.path.join(kliko.work_path, pattern))
 
 # format the arguments
-args =  list(chain(["-" + k, v] for k, v in parameters.items() if v))[0]
+args = list(chain(*[["-" + k, v] for k, v in parameters.items() if v]))
 
 # combine
 cmd = [binary] + args + ms_files
