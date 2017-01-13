@@ -209,6 +209,14 @@ for o in observations:
         input=INPUT, output=OUTPUT,
         label="convert::h5toms")
 
+    recipe.add("cab/msutils", "msutils",
+        {
+            'command'    : 'prep',
+            'msname'     : msfile,
+        },
+        input=OUTPUT, output=OUTPUT,
+        label="prepms::Adds flagsets")
+
     # RFI and bad channel flagging
     recipe.add("cab/rfimasker", "mask_stuff",
         {
@@ -232,7 +240,7 @@ for o in observations:
             "msname"    :   msfile,
             "mode"      :   "manual",
             "field"     :   '',
-            "spw"       :   '0:0~109',
+            "spw"       :   '0:0~110',
             "autocorr"  :   False, # steep rolloff, everything
         },
         input=OUTPUT, output=OUTPUT,
@@ -243,7 +251,7 @@ for o in observations:
             "msname"    :   msfile,
             "mode"      :   "manual",
             "field"     :   '',
-            "spw"       :   '0:3860~4095',
+            "spw"       :   '0:3840~4095',
             "autocorr"  :   False, # steep rolloff, everything
         },
         input=OUTPUT, output=OUTPUT,
@@ -388,13 +396,15 @@ for o in observations:
 
     recipe.add("cab/politsiyakat", "flag_malfunctioning_antennas",
         {
-            "task"                  : "flag_excessive_delay_error",
-            "msname"                : msfile,
-            "data_column"           : "CORRECTED_DATA",
-            "cal_field"             : str(bandpass_cal),
-            "valid_phase_range"     : "-35.0~35.0",
-            "max_invalid_timesteps" : 85.0, # % of all unflagged data per channel
-            "output_dir"            : os.environ["HOME"] + "/" + OUTPUT, #where is this thing mapped to inside the container
+            "task"                   : "flag_excessive_delay_error",
+            "msname"                 : msfile,
+            "data_column"            : "CORRECTED_DATA",
+            "cal_field"              : str(bandpass_cal),
+            "valid_phase_range"      : "-15.0~15.0",
+            "max_invalid_datapoints" : 95.0, # % of all unflagged data per channel
+            "output_dir"             : os.environ["HOME"] + "/" + OUTPUT, #where is this thing mapped to inside the container
+            "nrows_chunk"            : 100000,
+            "simulate"               : False,
         },
         input=INPUT, output=OUTPUT,
         label="flag_baseline_phases:: Flag baselines based on calibrator phases")
@@ -472,8 +482,9 @@ for o in observations:
     # Mark current flags as legacy
     recipe.add("cab/flagms", "clear_flags",
         {
-            "msname"    :  msfile,
-            "command"   :  "-Y +L -f legacy"
+            "msname"        :  msfile,
+            "flagged-any"   :  "all+L",
+            "flag"          :  "legacy",
         },
         input=INPUT,   output=OUTPUT,
         label="flagset_saveas_legacy:: Update legacy flags")
@@ -581,9 +592,37 @@ for o in observations:
             input=INPUT, output=OUTPUT,
             label="MSK_SC0_%d::Make clean mask" % ti)
 
+    for ti in targets:
+        # Extract sources in mfs clean image to build initial sky model
+        imname_prefix = basename + "_STOKES_V_RESIDUE_" + source_name[ti]
+
+        # it  is common belief that the Unverse is free of 
+        # stokes V for the most part. So any structure left
+        # in it is probably calibration artifacts
+        recipe.add("cab/wsclean", "wsclean_stokes_v",
+        {
+            "msname"            : msfile,
+            "column"            : 'CORRECTED_DATA',
+            "weight"            : 'briggs',
+            "robust"            : 0,
+            "npix"              : im_npix, # don't need the full FOV
+            "cellsize"          : angular_resolution,
+            "clean_iterations"  : 10000,
+            "mgain"             : 0.9,
+            "channelsout"       : im_numchans,
+            "joinchannels"      : True,
+            "field"             : str(ti),
+            "name"              : imname_prefix,
+            "pol"               : "V",
+        },
+        input=OUTPUT, output=OUTPUT,
+        label="image_stokesv_residue_%d::wsclean image STOKES "
+              "V as diagnostic" % ti)
+
     try:
         # Add Flagging and 1GC steps
         steps = ["convert",
+                 "prepms",
                  "mask",
                  "autoflag",
                  "flag_bandstart",
@@ -597,7 +636,7 @@ for o in observations:
                  "fluxscale",
                  "applycal",
                  "autoflag_corrected_vis",
-                 #"flag_baseline_phases",
+                 "flag_baseline_phases",
                 ]
         steps += ["image_%d" % ti for ti in targets]
         steps += ["image_bandpass", "image_gain"] # diagnostic only
@@ -614,6 +653,8 @@ for o in observations:
                       "image_SC0_%d" % ti,
                       "MSK_SC0_%d" % ti,
                      ]
+        # diagnostic only:
+        steps += ["image_stokesv_residue_%d" % ti for ti in targets]
 
         # RUN FOREST RUN!!!
         recipe.run(steps)
