@@ -210,8 +210,8 @@ for o in observations:
         (",".join([source_name[t] for t in targets]),
          ",".join([str(t) for t in targets])))
     vermeerkat.log.info("Will write ms file to %s" % msfile)
-    vermeerkat.log.info("Will use firstpass aoflagger strategy: %s" % cfg.aoflagger.firstpass_strategy_file)
-    vermeerkat.log.info("Will use secondpass aoflagger strategy: %s" % cfg.aoflagger.secondpass_strategy_file)
+    vermeerkat.log.info("Will use firstpass aoflagger strategy: %s" % cfg.autoflag.strategy_file)
+    vermeerkat.log.info("Will use secondpass aoflagger strategy: %s" % cfg.autoflag_corrected_vis.strategy_file)
     vermeerkat.log.info("Will use RFI mask: %s" % cfg.rfimask.rfi_mask_file)
     vermeerkat.log.info("Correlator integration interval recorded as: %.2f secs" % correlator_integration_time)
     vermeerkat.log.info("MFS maps will contain %.3f MHz per slice" % (bw_per_image_slice / 1e6))

@@ -47,41 +47,10 @@ def general_section_parser():
 
     return parser
 
-def rfi_mask_section_parser():
-    """ Parsers the aoflagger section """
-    parser = argparse.ArgumentParser("RFI Mask Section")
-
-    parser.add_argument('--rfi-mask-file',
-        default='',
-        help='Filename of the RFI Mask File')
-
-    return parser
-
-def wsclean_section_parser():
-    """ Parses the wsclean section """
-    parser = argparse.ArgumentParser("WSCLEAN Section")
-
-    return parser
-
-def aoflagger_section_parser():
-    """ Parsers the aoflagger section """
-    parser = argparse.ArgumentParser("AOFlagger")
-
-    parser.add_argument('--firstpass-strategy-file',
-        default='',
-        help="Filename of the AOFlagger Strategy File used for first pass RFI flagging (pre-cross-cal)")
-    parser.add_argument('--secondpass-strategy-file',
-        default='',
-        help="Filename of the AOFlagger Strategy File user for second pass RFI flagging (post-cross-cal)")
-    return parser
-
 # Dictionary of argument parsers for particular sections
 # Keys should correspond to associated sections in the
 _ARGPARSERS = {
     'general': general_section_parser,
-    'rfimask' : rfi_mask_section_parser,
-    'aoflagger' : aoflagger_section_parser,
-    'wsclean' : wsclean_section_parser,
 }
 
 def configuration(args=None):
@@ -142,9 +111,9 @@ def configuration(args=None):
             # Otherwise just dump the section options into a namedtuple
             # that looks like one produced by argparse
             else:
-                vermeerkat.log.warn("No argument parser "
-                    "exists for Section '{}'. Options will "
-                    "not be validated for this section.".format(cfg_section))
+                # vermeerkat.log.warn("No argument parser "
+                #     "exists for Section '{}'. Options will "
+                #     "not be validated for this section.".format(cfg_section))
 
                 section_args = argparse.Namespace(**section_defaults)
 
