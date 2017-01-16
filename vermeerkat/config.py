@@ -43,7 +43,6 @@ def general_section_parser():
         help='URL of the Solr server')
 
     parser.add_argument('-f', '--hdf5-file',
-        type=lambda a: is_valid_file(parser, a),
         help='Name of the HDF5 file to download')
 
     return parser
@@ -54,7 +53,6 @@ def rfi_mask_section_parser():
 
     parser.add_argument('--rfi-mask-file',
         default='',
-        type=lambda a: is_valid_file(parser, a),
         help='Filename of the RFI Mask File')
 
     return parser
@@ -71,11 +69,9 @@ def aoflagger_section_parser():
 
     parser.add_argument('--firstpass-strategy-file',
         default='',
-        type=lambda a: is_valid_file(parser, a),
         help="Filename of the AOFlagger Strategy File used for first pass RFI flagging (pre-cross-cal)")
     parser.add_argument('--secondpass-strategy-file',
         default='',
-        type=lambda a: is_valid_file(parser, a),
         help="Filename of the AOFlagger Strategy File user for second pass RFI flagging (post-cross-cal)")
     return parser
 
