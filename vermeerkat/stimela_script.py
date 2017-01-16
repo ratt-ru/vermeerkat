@@ -250,7 +250,7 @@ for o in observations:
             "mask"   : cfg.rfimask.rfi_mask_file,
         },
         input=INPUT, output=OUTPUT,
-        label="mask::maskms")
+        label="rfimask::maskms")
 
     recipe.add("cab/autoflagger", "auto_flag_rfi",
         {
