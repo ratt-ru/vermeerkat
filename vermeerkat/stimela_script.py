@@ -230,7 +230,7 @@ for o in observations:
         {
             'hdf5files'  : [h5file],
             'output-ms'  : msfile,
-            'full_pol'   : True,
+            'full_pol'   : cfg.h5toms.full_pol,
         },
         input=INPUT, output=OUTPUT,
         label="convert::h5toms")
