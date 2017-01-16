@@ -19,10 +19,11 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import argparse
-import ConfigParser
 import itertools
 import os
 import sys
+
+import ruamel.yaml
 
 import vermeerkat
 
@@ -80,9 +81,6 @@ _ARGPARSERS = {
 def configuration(args=None):
     """ Extract """
 
-    # Create parser object
-    parser = argparse.ArgumentParser("VerMeerKAT")
-
     #=========================================================
     # Handle the configuration file argument first,
     # if one is supplied use that for defaulting arguments
@@ -92,9 +90,12 @@ def configuration(args=None):
 
     def is_valid_file(parser, arg):
         if not os.path.exists(arg):
-            parser.error("The file %s does not exist!" % arg)
+            parser.error("The file '%s' does not exist!" % arg)
 
         return arg
+
+    # Create parser object
+    parser = argparse.ArgumentParser("VerMeerKAT")
 
     # Configuration file
     parser.add_argument('-c', '--config',
@@ -111,12 +112,9 @@ def configuration(args=None):
 
     # Load in configuration options from the configuration file
     vermeerkat.log.info("Loading defaults from {}".format(args.config))
-    config_parser = ConfigParser.SafeConfigParser()
-    # Convert dashes in options to underscores
-    # as this is how argparse will treat them
-    config_parser.optionxform = xformer
-    # Read the configuration file and extract options from the General section
-    config_parser.read(args.config)
+
+    with open(args.config, 'r') as f:
+        file_config = ruamel.yaml.load(f, ruamel.yaml.RoundTripLoader)
 
     def _section_args(sections, args):
         """ Yields namedtuples containing arguments for each section """
@@ -125,8 +123,9 @@ def configuration(args=None):
             # Extract configuration file options for this section
             # and use them as defaults for returning results
 
-            section_defaults = ({} if cfg_section is None
-                else dict(config_parser.items(cfg_section)))
+            section_defaults = file_config.get(cfg_section, None)
+            if section_defaults is None:
+                section_defaults = {}
 
             # If present, use the argument parser to parse
             # (and validate) arguments
@@ -148,7 +147,7 @@ def configuration(args=None):
     # Find the list of sections that should be parsed.
     # Obtained from sections in the config file and sections in
     # the _ARGPARSERS dictionary.
-    cfg_sections = { xformer(s): s for s in config_parser.sections() }
+    cfg_sections = { xformer(s): s for s in file_config.keys() }
     argp_sections = { xformer(k): pf for k, pf in _ARGPARSERS.iteritems() }
     all_sections = set(itertools.chain(cfg_sections.iterkeys(),
         argp_sections.iterkeys()))
