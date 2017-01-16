@@ -27,6 +27,12 @@ import ruamel.yaml
 
 import vermeerkat
 
+def is_valid_file(parser, arg):
+    if not os.path.exists(arg):
+        parser.error("The file '%s' does not exist!" % arg)
+
+    return arg
+
 def general_section_parser():
     """ Parses the general section """
     parser = argparse.ArgumentParser("General Section")
@@ -37,6 +43,7 @@ def general_section_parser():
         help='URL of the Solr server')
 
     parser.add_argument('-f', '--hdf5-file',
+        type=lambda a: is_valid_file(parser, a),
         help='Name of the HDF5 file to download')
 
     return parser
@@ -47,6 +54,7 @@ def rfi_mask_section_parser():
 
     parser.add_argument('--rfi-mask-file',
         default='',
+        type=lambda a: is_valid_file(parser, a),
         help='Filename of the RFI Mask File')
 
     return parser
@@ -63,9 +71,11 @@ def aoflagger_section_parser():
 
     parser.add_argument('--firstpass-strategy-file',
         default='',
+        type=lambda a: is_valid_file(parser, a),
         help="Filename of the AOFlagger Strategy File used for first pass RFI flagging (pre-cross-cal)")
     parser.add_argument('--secondpass-strategy-file',
         default='',
+        type=lambda a: is_valid_file(parser, a),
         help="Filename of the AOFlagger Strategy File user for second pass RFI flagging (post-cross-cal)")
     return parser
 
@@ -87,12 +97,6 @@ def configuration(args=None):
     # created further down the line, otherwise use the
     # default configuration file
     #=========================================================
-
-    def is_valid_file(parser, arg):
-        if not os.path.exists(arg):
-            parser.error("The file '%s' does not exist!" % arg)
-
-        return arg
 
     # Create parser object
     parser = argparse.ArgumentParser("VerMeerKAT")
@@ -117,15 +121,21 @@ def configuration(args=None):
         file_config = ruamel.yaml.load(f, ruamel.yaml.RoundTripLoader)
 
     def _section_args(sections, args):
-        """ Yields namedtuples containing arguments for each section """
+        """ Yields argparse.Namespace() containing arguments for each section """
 
         for section, (cfg_section, parser_factory) in sections.iteritems():
             # Extract configuration file options for this section
             # and use them as defaults for returning results
 
             section_defaults = file_config.get(cfg_section, None)
+
+            # cfg_section might also be None...
             if section_defaults is None:
                 section_defaults = {}
+
+            # Transform keys
+            section_defaults = { xformer(k): v for k, v
+                                in section_defaults.iteritems() }
 
             # If present, use the argument parser to parse
             # (and validate) arguments
@@ -143,6 +153,9 @@ def configuration(args=None):
                 section_args = argparse.Namespace(**section_defaults)
 
             yield section, section_args
+
+        if len(args) > 0:
+            vermeerkat.log.warn("'{}' arguments were not parsed".format(args))
 
     # Find the list of sections that should be parsed.
     # Obtained from sections in the config file and sections in
