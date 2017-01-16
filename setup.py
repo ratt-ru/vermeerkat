@@ -74,6 +74,7 @@ setup(name=PACKAGE_NAME,
         'progressbar2 >= 3.11.0',
         'pysolr >= 3.6.0',
         'requests >= 2.12.1',
+        'ruamel.yaml >= 0.13.7',
         'stimela >= 0.2.0', # Force install of master branch
         'katdal >= 0.7',
         'numpy >= 1.11.2',
