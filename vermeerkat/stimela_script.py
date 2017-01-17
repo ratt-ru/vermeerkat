@@ -28,6 +28,7 @@ import vermeerkat
 import katdal
 import glob
 from vermeerkat.caltable_parser import read_caltable
+from vermeerkat.caltable_parser import convert_pb_to_casaspi
 from functools import reduce
 
 from vermeerkat.config import configuration
@@ -306,43 +307,45 @@ for o in observations:
         label="recompute_uvw:: Recompute MeerKAT uvw coordinates")
 
     #Run SetJY with our database of southern calibrators
+    if source_name[bandpass_cal] not in calibrator_db:
+        raise RuntimeError("Looks like your flux reference '%s' is not "
+                           "in our standard. Try pulling the latest "
+                           "VermeerKAT or if you have done "
+                           "so report this issue" % source_name[bandpass_cal])
+
     aghz = calibrator_db[source_name[bandpass_cal]]["a_ghz"]
     bghz = calibrator_db[source_name[bandpass_cal]]["b_ghz"]
     cghz = calibrator_db[source_name[bandpass_cal]]["c_ghz"]
     dghz = calibrator_db[source_name[bandpass_cal]]["d_ghz"]
 
     # Find the brightness at reference frequency
-    k = np.log10(freq_0 / 1e9)
-    avv0 = (aghz + bghz * k + cghz * k ** 2 + dghz * k ** 3)
-    bvv0 = (bghz + 2 * cghz * k + 3 * dghz * k ** 2)
-    cvv0 = (cghz + 3 * dghz * k)
-    dvv0 = (+dghz)
-    flux_density = 10 ** (avv0 +
-                          bvv0 * (k - k) +
-                          cvv0 * (k - k) ** 2 +
-                          dvv0 * (k - k) ** 3)
+    I, a, b, c, d = convert_pb_to_casaspi(freq_0 / 1e9 - 
+                                          (nchans // 2) * chan_bandwidth / 1e9,
+                                          freq_0 / 1e9 + 
+                                          (nchans // 2) * chan_bandwidth / 1e9,
+                                          freq_0 / 1e9,
+                                          aghz,
+                                          bghz,
+                                          cghz,
+                                          dghz)
+
     vermeerkat.log.info("Using bandpass calibrator %s "
                         "with brightness of %.4f Jy "
+                        "(spix = [%.6f, %.6f, %.6f, %.6f]) "
                         "(@ %.2f MHz) "
                         "as the flux scale reference" %
                         (source_name[bandpass_cal],
-                         flux_density,
+                         I, a, b, c, d,
                          freq_0 / 1e6))
-    # TODO: convert PB into 
-    # I * nu/nu0 ^ [a+
-    #               b*log(nu/nu0) +
-    #               c*log(nu/nu0)**2 +
-    #               d*log(nu/nu0)**3]
-
     # 1GC Calibration
     recipe.add("cab/casa_setjy", "init_flux_scaling",
         {
             "msname"        :   msfile,
             "field"         :   str(bandpass_cal),
             "standard"      :   'manual',
-            "fluxdensity"   :   flux_density,
-            "spix"          :   -1.02239,  #TODO: fill coefficients
-            "reffreq"       :   freq_0 / 1e6,
+            "fluxdensity"   :   I,
+            "spix"          :   ",".join(str(x) for x in [a, b, c, d]), 
+            "reffreq"       :   "%.2fGHz" % (freq_0 / 1e9),
             "usescratch"    :   False,
             "scalebychan"   :   True,
             "spw"           :   '',
