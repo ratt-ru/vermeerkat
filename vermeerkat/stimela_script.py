@@ -26,11 +26,37 @@ import re
 import stimela
 import vermeerkat
 import katdal
+import glob
+from vermeerkat.caltable_parser import read_caltable
+from vermeerkat.caltable_parser import convert_pb_to_casaspi
 from functools import reduce
 
 from vermeerkat.config import configuration
 from vermeerkat.observation import (query_recent_observations,
     download_observation)
+
+# There isn't a Southern standard in CASA
+# so construct a little database of them for reference
+vermeerkat.log.info("Parsing calibrator table")
+ref_table = os.path.dirname(
+    os.path.abspath(vermeerkat.__file__)) + "/southern_calibrators.txt"
+calibrator_db = read_caltable(ref_table)
+
+vermeerkat.log.info("Found the following reference calibrators (in GHz format):")
+for key in calibrator_db:
+    name = key
+    epoch = calibrator_db[name]["epoch"]
+    ra = calibrator_db[name]["ra"]
+    decl = calibrator_db[name]["decl"]
+    ag = calibrator_db[name]["a_ghz"]
+    bg = calibrator_db[name]["b_ghz"]
+    cg = calibrator_db[name]["c_ghz"]
+    dg = calibrator_db[name]["d_ghz"]
+    vermeerkat.log.info("\t%s\tEpoch:%d\tRA:%3.2f\tDEC:%3.2f\t"
+                       "a:%.4f\tb:%.4f\tc:%.4f\td:%.4f" %
+        (name, epoch, ra, decl, ag, bg, cg, dg))
+
+# Register directories
 
 INPUT = "input"
 OUTPUT = "output"
@@ -68,11 +94,12 @@ for o in observations:
     msfile = ''.join((basename, '.ms'))
 
     # Calibrator tables
+    delaycal_table = "%s.K0" % (basename)
     phasecal_table = "%s.G0" % (basename)
     ampcal_table = "%s.G1" % (basename)
     fluxcal_table = "%s.fluxscale" % (basename)
     bpasscal_table = "%s.B0" % (basename)
-    
+
     #Observation properties
     refant = o["RefAntenna"]
     correlator_integration_time = o["DumpPeriod"]
@@ -81,28 +108,28 @@ for o in observations:
     nchans = o["NumFreqChannels"]
     chan_bandwidth = o["ChannelWidth"]
     lambda_max = (299792458.0 / (freq_0 + (nchans // 2) * chan_bandwidth)) 
-    telescope_max_baseline = 8e4 
-    angular_resolution = np.rad2deg(lambda_max / 
-                                    telescope_max_baseline * 
+    telescope_max_baseline = 8e4
+    angular_resolution = np.rad2deg(lambda_max /
+                                    telescope_max_baseline *
                                     1.220) * 3600 #nyquest rate in arcsecs
     fov = 3 * 3600 # 3 degrees (ample to cover MeerKAT primary beam in L-Band)
     im_npix = fov / angular_resolution
-    bw_per_image_slice = 42.8e6 
+    bw_per_image_slice = 100.0e6
     im_numchans = int(np.ceil(o["ChannelWidth"] * nchans / bw_per_image_slice))
 
     bandpass_cal_candidates = []
     gain_cal_candidates = []
     targets = []
     source_name = []
-    
+
     d = katdal.open(INPUT + "/" + h5file)
-    scans = [(scan, 
-              target.name, 
-              target.tags, 
-              target.radec(), 
+    scans = [(scan,
+              target.name,
+              target.tags,
+              target.radec(),
               d.timestamps[-1] - d.timestamps[0])
-             for (scan, 
-                  state, 
+             for (scan,
+                  state,
                   target) in d.scans() if state == "track"]
 
     for si, scan in enumerate(scans):
@@ -128,7 +155,7 @@ for o in observations:
     if len(bandpass_cal_candidates) < 1:
         raise RuntimeError("Observation %s does not have any "
                            "bandpass calibrators" % o["ProductName"])
-       
+
     # select gaincal candidate closest to the centre of the cluster of targets
     target_coordinates = [scans[ti][3] for ti, t in enumerate(targets)]
     gaincal_coordinates = [scans[gi][3] for gi, g in enumerate(gain_cal_candidates)]
@@ -136,7 +163,7 @@ for o in observations:
     lmdistances = np.sum((np.array(gaincal_coordinates) - mean_target_position)**2,
                          axis=0)
     gain_cal = np.argmin(lmdistances)
-   
+
     # never use the gain calibrator for a bandpass calibrator
     bandpass_cal_candidates = [x for x in bandpass_cal_candidates if x != gain_cal] 
     bp_cand_obs_len = [reduce((lambda x, y: x + y),
@@ -150,7 +177,7 @@ for o in observations:
                                       scans))))
                            for cand in bandpass_cal_candidates]
     bpcal_sol_int = bandpass_scan_times[bandpass_cal_candidates.index(bandpass_cal)]
-    
+
     # compute the observation time spent on targets:
     target_scan_times = [reduce((lambda x, y: x + y),
                                 list(map((lambda q: q[4]),
@@ -197,7 +224,7 @@ for o in observations:
 
     # All good to go fire up the pipeline
     recipe = stimela.Recipe("Imaging Pipeline", ms_dir=MSDIR)
-    
+
     # Convert
     recipe.add("cab/h5toms", "h5toms",
         {
@@ -207,6 +234,14 @@ for o in observations:
         },
         input=INPUT, output=OUTPUT,
         label="convert::h5toms")
+
+    recipe.add("cab/msutils", "msutils",
+        {
+            'command'    : 'prep',
+            'msname'     : msfile,
+        },
+        input=OUTPUT, output=OUTPUT,
+        label="prepms::Adds flagsets")
 
     # RFI and bad channel flagging
     recipe.add("cab/rfimasker", "mask_stuff",
@@ -225,16 +260,16 @@ for o in observations:
         },
         input=INPUT, output=OUTPUT,
         label="autoflag:: Auto Flagging ms")
-    
+
     recipe.add("cab/casa_flagdata", "flag_bad_start_channels",
         {
             "msname"    :   msfile,
             "mode"      :   "manual",
             "field"     :   '',
-            "spw"       :   '0:0~109',
-            "autocorr"  :   True,
+            "spw"       :   '0:0~110',
+            "autocorr"  :   False, # steep rolloff, everything
         },
-    	input=OUTPUT, output=OUTPUT,
+        input=OUTPUT, output=OUTPUT,
         label="flag_bandstart:: Flag start of band")
 
     recipe.add("cab/casa_flagdata", "flag_bad_end_channels",
@@ -242,30 +277,103 @@ for o in observations:
             "msname"    :   msfile,
             "mode"      :   "manual",
             "field"     :   '',
-            "spw"       :   '0:3860~4095',
-            "autocorr"  :   True,
+            "spw"       :   '0:3840~4095',
+            "autocorr"  :   False, # steep rolloff, everything
         },
-    	input=OUTPUT, output=OUTPUT,
+        input=OUTPUT, output=OUTPUT,
         label="flag_bandend:: Flag end of band")
-    
+
+    recipe.add("cab/casa_flagdata", "flag_autocorrs",
+        {
+            "msname"    :   msfile,
+            "mode"      :   "manual",
+            "field"     :   '',
+            "spw"       :   '0:0~4095',
+            "autocorr"  :   True, # flag only the autocorrs
+        },
+        input=OUTPUT, output=OUTPUT,
+        label="flag_autocorrs:: Flag auto correlations")
+
+    # @mauch points out some MeerKAT h5 files contain flipped uvw
+    # coordinates. Better to recalculate this from ANTENNAS
+    # and be dead sure things will always work!
+    recipe.add("cab/casa_fixvis", "fixvis",
+        {
+            "vis"       :   msfile,
+            "outputvis" :   msfile, # into same ms please
+            "reuse"     :   False,
+        },
+        input=OUTPUT, output=OUTPUT,
+        label="recompute_uvw:: Recompute MeerKAT uvw coordinates")
+
+    #Run SetJY with our database of southern calibrators
+    if source_name[bandpass_cal] not in calibrator_db:
+        raise RuntimeError("Looks like your flux reference '%s' is not "
+                           "in our standard. Try pulling the latest "
+                           "VermeerKAT or if you have done "
+                           "so report this issue" % source_name[bandpass_cal])
+
+    aghz = calibrator_db[source_name[bandpass_cal]]["a_ghz"]
+    bghz = calibrator_db[source_name[bandpass_cal]]["b_ghz"]
+    cghz = calibrator_db[source_name[bandpass_cal]]["c_ghz"]
+    dghz = calibrator_db[source_name[bandpass_cal]]["d_ghz"]
+
+    # Find the brightness at reference frequency
+    I, a, b, c, d = convert_pb_to_casaspi(freq_0 / 1e9 - 
+                                          (nchans // 2) * chan_bandwidth / 1e9,
+                                          freq_0 / 1e9 + 
+                                          (nchans // 2) * chan_bandwidth / 1e9,
+                                          freq_0 / 1e9,
+                                          aghz,
+                                          bghz,
+                                          cghz,
+                                          dghz)
+
+    vermeerkat.log.info("Using bandpass calibrator %s "
+                        "with brightness of %.4f Jy "
+                        "(spix = [%.6f, %.6f, %.6f, %.6f]) "
+                        "(@ %.2f MHz) "
+                        "as the flux scale reference" %
+                        (source_name[bandpass_cal],
+                         I, a, b, c, d,
+                         freq_0 / 1e6))
     # 1GC Calibration
     recipe.add("cab/casa_setjy", "init_flux_scaling",
         {
             "msname"        :   msfile,
             "field"         :   str(bandpass_cal),
-            # Relies on a custom casa docker image with
-            # southern calibrators
-            "standard"      :   'Perley-Butler 2013',
-            #"fluxdensity"   :   24.5372,
-            #"spix"          :   -1.02239,
-            #"reffreq"       :   '900MHz',
+            "standard"      :   'manual',
+            "fluxdensity"   :   I,
+            "spix"          :   ",".join(str(x) for x in [a, b, c, d]), 
+            "reffreq"       :   "%.2fGHz" % (freq_0 / 1e9),
             "usescratch"    :   False,
             "scalebychan"   :   True,
             "spw"           :   '',
         },
-    	input=OUTPUT, output=OUTPUT,
+        input=OUTPUT, output=OUTPUT,
         label="setjy:: Initial flux density scaling")
 
+    # @mauch points out some antenna positions may
+    # be slightly off. This will cause a noticible
+    # decorrelation on the longest baselines, so
+    # better calibrate for this one (we can use the
+    # bright bandpass and gain calibrator sources).
+    recipe.add("cab/casa_gaincal", "delay cal",
+        {
+            "msname"        : msfile,
+            "field"         : ",".join([str(bandpass_cal),
+                                        str(gain_cal)]),
+            "gaintype"      : "K",
+            "solint"        : "inf", #not sure if this is optimal
+            "minsnr"        : 5.0,
+            "refant"        : refant,
+            "caltable"      : delaycal_table,
+        },
+        input=OUTPUT, output=OUTPUT,
+        label="delaycal:: Delay calibration")
+
+    # The bandpass calibrator may vary in phase over time
+    # so lets do a preliminary phase cal to correct for this
     recipe.add("cab/casa_gaincal", "init_phase_cal",
         {
             "msname"        :   msfile,
@@ -274,30 +382,39 @@ for o in observations:
             "refant"        :   refant,
             "calmode"       :   'p',
             "solint"        :   gain_sol_int,
+            "solnorm"       :   True,
             "minsnr"        :   3,
+            "gaintable"     :   [delaycal_table],
         },
-    	input=OUTPUT, output=OUTPUT,
+        input=OUTPUT, output=OUTPUT,
         label="phase0:: Initial phase calibration")
 
-
+    # Then a bandpass calibration, lets work out a solution
+    # per scan interval to see if things vary signifcantly
+    # over time... this will be very bad for your reduction.
     recipe.add("cab/casa_bandpass", "bandpass_cal",
-        {   
-            "msname"        :   msfile, 
+        {
+            "msname"        :   msfile,
             "caltable"      :   bpasscal_table,
             "field"         :   str(bandpass_cal),
             "spw"           :   '',
             "refant"        :   refant,
+            "solnorm"       :   True,
             "combine"       :   'scan',
             "solint"        :   str(bpcal_sol_int) + "s",
             "bandtype"      :   'B',
             "minblperant"   :   1,
             "minsnr"        :   3,
-            "gaintable"     :   [phasecal_table],
+            "gaintable"     :   [delaycal_table,
+                                 phasecal_table],
+            "interp"        :   ['nearest',
+                                 'nearest']
         },
-    	input=OUTPUT, output=OUTPUT,
-        label="bandpass:: First bandpass calibration")
+        input=OUTPUT, output=OUTPUT,
+        label="bandpass:: Bandpass calibration")
 
-
+    # Finally we do a second order correction on the gain
+    # cal source that is closest to the target fields
     recipe.add("cab/casa_gaincal", "main_gain_calibration",
         {
             "msname"       :   msfile,
@@ -309,14 +426,16 @@ for o in observations:
             "gaintype"     :   'G',
             "calmode"      :   'ap',
             "solnorm"      :   False,
-            "gaintable"    :   [phasecal_table,
+            "gaintable"    :   [delaycal_table,
+                                phasecal_table,
                                 bpasscal_table],
             "interp"       :   ['linear','linear','nearest'],
         },
-    	input=OUTPUT, output=OUTPUT,
+        input=OUTPUT, output=OUTPUT,
         label="gaincal:: Gain calibration")
 
-
+    # Scale the gaincal solutions amplitude to that of the
+    # bandpass calibrator (the flux scale reference)
     recipe.add("cab/casa_fluxscale", "casa_fluxscale",
         {
             "msname"        :   msfile,
@@ -326,21 +445,38 @@ for o in observations:
             "transfer"      :   [str(gain_cal)],
             "incremental"   :   False,
         },
-    	input=OUTPUT, output=OUTPUT,
+        input=OUTPUT, output=OUTPUT,
         label="fluxscale:: Setting Fluxscale")
 
+    # Apply gain solutions to all fields including
+    # the calibrators so that we can diagnose problems more
+    # easily. Later steps depend on this so don't remove
+    # the gain application to calibrators
     recipe.add("cab/casa_applycal", "apply_calibration", 
         {
             "msname"        :   msfile,
             "field"         :   ",".join([str(x) for x in (targets + [bandpass_cal, gain_cal])]),
-            "gaintable"     :   [phasecal_table, bpasscal_table, fluxcal_table],
-            "gainfield"     :   [bandpass_cal, bandpass_cal, gain_cal],
+            "gaintable"     :   [delaycal_table,
+                                 phasecal_table,
+                                 bpasscal_table,
+                                 fluxcal_table],
+            "gainfield"     :   [bandpass_cal,
+                                 bandpass_cal,
+                                 bandpass_cal,
+                                 gain_cal],
+            "interp"        :   ["linear",
+                                 "linear",
+                                 "nearest",
+                                 "linear"],
             "spwmap"        :   [[], [], []],
             "parang"        :   True,
         },
-    	input=OUTPUT, output=OUTPUT,
+        input=OUTPUT, output=OUTPUT,
         label="applycal:: Apply calibration solutions to target")
 
+    # Lets try squash the last of the RFI with the autoflagger
+    # TODO: the strategy used here may still need some fine tuning 
+    # Think we should make it a bit more aggressive
     recipe.add("cab/autoflagger", "auto_flag_rfi_corrected_vis",
         {
             "msname"    : msfile,
@@ -349,6 +485,168 @@ for o in observations:
         },
         input=INPUT, output=OUTPUT,
         label="autoflag_corrected_vis:: Auto Flagging calibrated visibilities")
+
+    # Some antennae may malfunction during the observation and not track
+    # properly. This causes severe phase problems so its better to remove
+    # them from the equation... for this we look at the phase of the calibrated
+    # bandpass calibrator and flag out baselines (per channel) which are not up
+    # to spec
+
+    recipe.add("cab/politsiyakat", "flag_malfunctioning_antennas",
+        {
+            "task"                   : "flag_excessive_delay_error",
+            "msname"                 : msfile,
+            "data_column"            : "CORRECTED_DATA",
+            "cal_field"              : str(bandpass_cal),
+            "valid_phase_range"      : "-15.0~15.0",
+            "max_invalid_datapoints" : 95.0, # % of all unflagged data per channel
+            "output_dir"             : os.environ["HOME"] + "/" + OUTPUT, #where is this thing mapped to inside the container
+            "nrows_chunk"            : 100000,
+            "simulate"               : False,
+        },
+        input=INPUT, output=OUTPUT,
+        label="flag_baseline_phases:: Flag baselines based on calibrator phases")
+
+    # Diagnostic: amplitude vs uv dist of the bandpass calibrator
+    # @mauch points out we expect all baselines to observe the same amplitude
+    # for the point source-like bandpass calibrator
+    recipe.add("cab/casa_plotms", "plot_amp_v_uv_dist_of_bp_calibrator",
+        {
+            "msname"            : msfile,
+            "xaxis"             : "uvdist",
+            "yaxis"             : "amplitude",
+            "xdatacolumn"       : "corrected",
+            "ydatacolumn"       : "corrected",
+            "field"             : str(bandpass_cal),
+            "correlation"       : "XX,YY",
+            "avgchannel"        : "15",
+            "avgtime"           : "15",
+            "coloraxis"         : "channel",
+            "expformat"         : "png",
+            "exprange"          : "all",
+            "plotfile"          : basename + "_" +
+                                  source_name[bandpass_cal] + "_" +
+                                  "ampuvdist.png",
+        },
+        input=OUTPUT, output=OUTPUT,
+        label="plot_ampuvdist:: Diagnostic plot of amplitude with uvdist")
+
+    #Diagnostic: phase vs uv dist of the bandpass calibrator
+    recipe.add("cab/casa_plotms", "plot_phase_v_uv_dist_of_bp_calibrator",
+        {
+            "msname"            : msfile,
+            "xaxis"             : "uvdist",
+            "yaxis"             : "phase",
+            "xdatacolumn"       : "corrected",
+            "ydatacolumn"       : "corrected",
+            "field"             : str(bandpass_cal),
+            "correlation"       : "XX,YY",
+            "avgchannel"        : "15",
+            "avgtime"           : "15",
+            "coloraxis"         : "channel",
+            "expformat"         : "png",
+            "exprange"          : "all",
+            "plotfile"          : basename + "_" +
+                                  source_name[bandpass_cal] + "_" +
+                                  "ampuvdist.png",
+        },
+        input=OUTPUT, output=OUTPUT,
+        label="plot_phaseuvdist:: Diagnostic plot of phase with uvdist")
+
+    # Diagnostic: amplitude vs phase of bp calibrator per antenna
+    recipe.add("cab/casa_plotms", "plot_amp_v_phase_of_bp_calibrator",
+        {
+            "msname"            : msfile,
+            "xaxis"             : "amplitude",
+            "yaxis"             : "phase",
+            "xdatacolumn"       : "corrected",
+            "ydatacolumn"       : "corrected",
+            "field"             : str(bandpass_cal),
+            # auto correlations will not be flagged no use
+            # plotting them
+            #"iteraxis"          : "antenna",
+            "correlation"       : "XX,YY",
+            "avgchannel"        : "15",
+            "avgtime"           : "15",
+            "coloraxis"         : "channel",
+            "expformat"         : "png",
+            "exprange"          : "all",
+            "plotfile"          : basename + "_" +
+                                  source_name[bandpass_cal] + "_" +
+                                  "phaseball.png",
+        },
+        input=OUTPUT, output=OUTPUT,
+        label="plot_phaseball:: Diagnostic plot of phaseball")
+
+    # Diagnostic: amplitude vs frequency of bp calibrator
+    recipe.add("cab/casa_plotms", "plot_amp_v_freq_of_bp_calibrator",
+        {
+            "msname"            : msfile,
+            "xaxis"             : "frequency",
+            "yaxis"             : "amplitude",
+            "xdatacolumn"       : "corrected",
+            "ydatacolumn"       : "corrected",
+            "field"             : str(bandpass_cal),
+            "correlation"       : "XX,YY",
+            "avgchannel"        : "0",
+            "avgtime"           : "0",
+            "coloraxis"         : "baseline",
+            "expformat"         : "png",
+            "exprange"          : "all",
+            "plotfile"          : basename + "_" +
+                                  source_name[bandpass_cal] + "_" +
+                                  "band.png",
+        },
+        input=OUTPUT, output=OUTPUT,
+        label="plot_amp_freq:: Diagnostic plot of band")
+
+    # Diagnostic: phase vs time of bp calibrator
+    # @oms points out slopes in this will indicate problems with
+    # digitizer reference timing / probably also any uncorrected
+    # antenna positions
+    recipe.add("cab/casa_plotms", "plot_phase_vs_time_of_bp_calibrator",
+        {
+            "msname"            : msfile,
+            "xaxis"             : "time",
+            "yaxis"             : "phase",
+            "xdatacolumn"       : "corrected",
+            "ydatacolumn"       : "corrected",
+            "field"             : str(bandpass_cal),
+            "correlation"       : "XX,YY",
+            "avgchannel"        : "0",
+            "avgtime"           : "0",
+            "coloraxis"         : "baseline",
+            "expformat"         : "png",
+            "exprange"          : "all",
+            "plotfile"          : basename + "_" +
+                                  source_name[bandpass_cal] + "_" +
+                                  "phasevtime.png",
+        },
+        input=OUTPUT, output=OUTPUT,
+        label="plot_phase_time:: Diagnostic plot of phase with time")
+
+    # Diagnostic: phase vs time of bp calibrator
+    # For similar purposes as phase vs freq
+    recipe.add("cab/casa_plotms", "plot_phase_vs_freq_of_bp_calibrator",
+        {
+            "msname"            : msfile,
+            "xaxis"             : "frequency",
+            "yaxis"             : "phase",
+            "xdatacolumn"       : "corrected",
+            "ydatacolumn"       : "corrected",
+            "field"             : str(bandpass_cal),
+            "correlation"       : "XX,YY",
+            "avgchannel"        : "0",
+            "avgtime"           : "0",
+            "coloraxis"         : "baseline",
+            "expformat"         : "png",
+            "exprange"          : "all",
+            "plotfile"          : basename + "_" +
+                                  source_name[bandpass_cal] + "_" +
+                                  "phasevfreq.png",
+        },
+        input=OUTPUT, output=OUTPUT,
+        label="plot_phase_freq:: Diagnostic plot of phase with freq")
 
     # # this wastes disk space... who cares if the calibrators are in there or not
     # # it's actually very useful to keep them and inspect their solutions - 
@@ -362,10 +660,9 @@ for o in observations:
     # input=INPUT, output=OUTPUT,
     # label="split_target:: Split calibrated target data")
 
-
     # imaging
     for ti in targets:
-        imname = basename + "_" + source_name[ti]
+        imname = basename + "_1GC_" + source_name[ti]
         recipe.add("cab/wsclean", "wsclean_%d" % ti,
             {
                 "msname"            : msfile,
@@ -374,7 +671,7 @@ for o in observations:
                 "robust"            : 0,
                 "npix"              : im_npix,
                 "cellsize"          : angular_resolution,
-                "clean_iterations"  : 1000,
+                "clean_iterations"  : 10000,
                 "mgain"             : 0.9,
                 "channelsout"       : im_numchans,
                 "joinchannels"      : True,
@@ -422,21 +719,207 @@ for o in observations:
         input=OUTPUT, output=OUTPUT,
         label="image_gain::wsclean")
 
+    # Copy CORRECTED_DATA to DATA, so we can start selfcal
+    recipe.add("cab/msutils", "shift_columns",
+        {
+            "command"           : "copycol",
+            "msname"            : msfile,
+            "fromcol"           : "CORRECTED_DATA",
+            "tocol"             : "DATA",
+        },
+        input=OUTPUT, output=OUTPUT,
+        label="move_corrdata_to_data::msutils")
+
+    # Mark current flags as legacy
+    recipe.add("cab/flagms", "clear_flags",
+        {
+            "msname"        :  msfile,
+            "flagged-any"   :  "all+L",
+            "flag"          :  "legacy",
+        },
+        input=INPUT,   output=OUTPUT,
+        label="flagset_saveas_legacy:: Update legacy flags")
+
+    # Initial selfcal loop
+    for ti in targets:
+        # Extract sources in mfs clean image to build initial sky model
+        imname_prefix = basename + "_1GC_" + source_name[ti]
+        imname_mfs = imname_prefix + "-MFS-image.fits"
+        model_prefix = basename + "_LSM0_" + source_name[ti]
+        model_name = model_prefix + ".lsm.html"
+        recipe.add("cab/sourcery", "extract_sources_%d" % ti,
+            {
+                "imagename"     : imname_mfs,
+                "prefix"        : model_prefix,
+                "pybdsm"        : True,
+                "thresh_pix"    : 20,
+                "thresh_isl"    : 10,
+            },
+            input=OUTPUT, output=OUTPUT,
+            label="source_find_%d:: Extract sources from previous round of cal" % ti)
+
+        # Stitch wsclean channel images into a cube
+        cubename = basename + "_1GC_" + source_name[ti] + "-CLEAN_cube.fits"
+        recipe.add("cab/fitstool", "fitstool",
+            {
+                "image-names"       : [os.path.basename(img)
+                                       for img in glob.glob("%s/%s-*-image.fits" %
+                                                            (OUTPUT,
+                                                             imname_prefix))],
+                "output"            : cubename,
+                "stack"             : "%s:3" % cubename,
+            },
+            input=OUTPUT, output=OUTPUT,
+            label="stitch_cube_%d:: Stitch MFS image slices into a cube" % ti)
+
+        # Add SPIs
+        recipe.add("cab/specfit", "add_SPIs_LSM0",
+            {
+                "image"     :   cubename,
+                "make_spi"  :   True,    # Make SPI map
+                "tol"       :   (-4,4),  # Anything above this spi is highly unlikely
+                "spi_image" :   "", # Don't have an alpha map
+                "add_spi"   :   True,
+                "skymodel"  :   model_name, # model to which SPIs must be added
+                "freq0"     :   freq_0,    # reference frequency for SPI calculation
+                "sigma"     :   20,
+            },
+            input=OUTPUT, output=OUTPUT,
+            label="SPI_%d::Add SPIs to LSM" % ti)
+
+        # Selfcal and subtract brightest sources           
+        recipe.add("cab/calibrator", "Initial_Gjones_subtract_LSM0",
+            {
+                "skymodel"  :   model_name,
+                "reset"     :   "all",  # Reset all existing gains
+                "label"     :   "cal0",
+                "msname"    :   msfile,
+                "ncpu"      :   16,
+                "column"    :   "DATA",
+                "output"    :   "CORR_RES",
+                "Gjones"    :   True,
+                "Gjones_intervals" : [gain_sol_int, nchans / float(1000)],
+                "DDjones_smoothing" :  1,
+                # TODO: MeerKAT beams need to go in this section
+                "Ejones"    :   False,
+                "beam_files_pattern" : "",
+                "beam_l_axis" : "",
+                "beam_m_axis" : "",
+                "gjones_ampl_clipping"  :   5,
+                "args"  :   ["stefcal_gain.delta=1e-6"],
+            },
+            input=OUTPUT, output=OUTPUT,
+            label="SELFCAL0_%d:: Calibrate and subtract LSM0" % ti)
+
+        #make another mfs image 
+        imname_prefix = basename + "_SC0_" + source_name[ti]
+        recipe.add("cab/wsclean", "wsclean_SC0_%d" % ti,
+            {
+                "msname"            : msfile,
+                "column"            : 'CORRECTED_DATA',
+                "weight"            : 'briggs',
+                "robust"            : 0,
+                "npix"              : im_npix,
+                "cellsize"          : angular_resolution,
+                "clean_iterations"  : 10000,
+                "mgain"             : 0.9,
+                "channelsout"       : im_numchans,
+                "joinchannels"      : True,
+                "field"             : str(ti),
+                "name"              : imname_prefix,
+            },
+            input=OUTPUT, output=OUTPUT,
+            label="image_SC0_%d::wsclean" % ti)
+
+        #create a mask for this round of selfcal
+        imname_mfs = imname_prefix + "-MFS-image.fits"
+        maskname = imname_prefix + "_MASK"
+        recipe.add("cab/cleanmask", "make_clean_mask",
+            {
+                "image"     :   imname_mfs,
+                "outname"   :   maskname,
+                "sigma"     :   20,
+                "iters"     :   10,
+                "kernel"    :   13,
+            },
+            input=INPUT, output=OUTPUT,
+            label="MSK_SC0_%d::Make clean mask" % ti)
+
+    for ti in targets:
+        # Extract sources in mfs clean image to build initial sky model
+        imname_prefix = basename + "_STOKES_V_RESIDUE_" + source_name[ti]
+
+        # it  is common belief that the Unverse is free of 
+        # stokes V for the most part. So any structure left
+        # in it is probably calibration artifacts
+        recipe.add("cab/wsclean", "wsclean_stokes_v",
+        {
+            "msname"            : msfile,
+            "column"            : 'CORRECTED_DATA',
+            "weight"            : 'briggs',
+            "robust"            : 0,
+            "npix"              : im_npix, # don't need the full FOV
+            "cellsize"          : angular_resolution,
+            "clean_iterations"  : 10000,
+            "mgain"             : 0.9,
+            "channelsout"       : im_numchans,
+            "joinchannels"      : True,
+            "field"             : str(ti),
+            "name"              : imname_prefix,
+            "pol"               : "V",
+        },
+        input=OUTPUT, output=OUTPUT,
+        label="image_stokesv_residue_%d::wsclean image STOKES "
+              "V as diagnostic" % ti)
+
     try:
-        recipe.run("convert "
-                   "mask "
-                   "autoflag "
-                   "flag_bandstart "
-                   "flag_bandend "
-                   "setjy "
-                   "phase0 "
-                   "bandpass "
-                   "gaincal "
-                   "fluxscale "
-                   "applycal "
-                   "autoflag_corrected_vis".split() + 
-                   ["image_%d" % ti for ti in targets] +
-                   ["image_bandpass", "image_gain"])
+        # Add Flagging and 1GC steps
+        steps = ["convert",
+                 "prepms",
+                 "mask",
+                 "autoflag",
+                 "flag_bandstart",
+                 "flag_bandend",
+                 "flag_autocorrs",
+                 "recompute_uvw",
+                 "setjy",
+                 "delaycal",
+                 "phase0",
+                 "bandpass",
+                 "gaincal",
+                 "fluxscale",
+                 "applycal",
+                 "autoflag_corrected_vis",
+                 "flag_baseline_phases",
+                 "plot_ampuvdist",
+                 "plot_phaseuvdist",
+                 "plot_phaseball",
+                 "plot_amp_freq",
+                 "plot_phase_time",
+                 "plot_phase_freq",
+                ]
+        steps += ["image_%d" % ti for ti in targets]
+        steps += ["image_bandpass", "image_gain"] # diagnostic only
+
+        # Initial selfcal loop
+        steps += ["move_corrdata_to_data",
+                  "flagset_saveas_legacy",
+                 ]
+
+        for ti in targets:
+            steps += ["source_find_%d" % ti,
+                      "stitch_cube_%d" % ti,
+                      "SPI_%d" % ti,
+                      "SELFCAL0_%d" % ti,
+                      "image_SC0_%d" % ti,
+                      "MSK_SC0_%d" % ti,
+                     ]
+
+        # diagnostic only:
+        steps += ["image_stokesv_residue_%d" % ti for ti in targets]
+
+        # RUN FOREST RUN!!!
+        recipe.run(steps)
 
     except stimela.PipelineException as e:
         print 'completed {}'.format([c.label for c in e.completed])
