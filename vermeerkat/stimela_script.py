@@ -27,11 +27,35 @@ import stimela
 import vermeerkat
 import katdal
 import glob
+from vermeerkat.caltable_parser import read_caltable
 from functools import reduce
 
 from vermeerkat.config import configuration
 from vermeerkat.observation import (query_recent_observations,
     download_observation)
+
+# There isn't a Southern standard in CASA
+# so construct a little database of them for reference
+vermeerkat.log.info("Parsing calibrator table")
+ref_table = os.path.dirname(
+    os.path.abspath(vermeerkat.__file__)) + "/southern_calibrators.txt"
+calibrator_db = read_caltable(ref_table)
+
+vermeerkat.log.info("Found the following reference calibrators (in GHz format):")
+for key in calibrator_db:
+    name = key
+    epoch = calibrator_db[name]["epoch"]
+    ra = calibrator_db[name]["ra"]
+    decl = calibrator_db[name]["decl"]
+    ag = calibrator_db[name]["a_ghz"]
+    bg = calibrator_db[name]["b_ghz"]
+    cg = calibrator_db[name]["c_ghz"]
+    dg = calibrator_db[name]["d_ghz"]
+    vermeerkat.log.info("\t%s\tEpoch:%d\tRA:%3.2f\tDEC:%3.2f\t"
+                       "a:%.4f\tb:%.4f\tc:%.4f\td:%.4f" %
+        (name, epoch, ra, decl, ag, bg, cg, dg))
+
+# Register directories
 
 INPUT = "input"
 OUTPUT = "output"
@@ -281,17 +305,44 @@ for o in observations:
         input=OUTPUT, output=OUTPUT,
         label="recompute_uvw:: Recompute MeerKAT uvw coordinates")
 
+    #Run SetJY with our database of southern calibrators
+    aghz = calibrator_db[source_name[bandpass_cal]]["a_ghz"]
+    bghz = calibrator_db[source_name[bandpass_cal]]["b_ghz"]
+    cghz = calibrator_db[source_name[bandpass_cal]]["c_ghz"]
+    dghz = calibrator_db[source_name[bandpass_cal]]["d_ghz"]
+
+    # Find the brightness at reference frequency
+    k = np.log10(freq_0 / 1e9)
+    avv0 = (aghz + bghz * k + cghz * k ** 2 + dghz * k ** 3)
+    bvv0 = (bghz + 2 * cghz * k + 3 * dghz * k ** 2)
+    cvv0 = (cghz + 3 * dghz * k)
+    dvv0 = (+dghz)
+    flux_density = 10 ** (avv0 +
+                          bvv0 * (k - k) +
+                          cvv0 * (k - k) ** 2 +
+                          dvv0 * (k - k) ** 3)
+    vermeerkat.log.info("Using bandpass calibrator %s "
+                        "with brightness of %.4f Jy "
+                        "(@ %.2f MHz) "
+                        "as the flux scale reference" %
+                        (source_name[bandpass_cal],
+                         flux_density,
+                         freq_0 / 1e6))
+    # TODO: convert PB into 
+    # I * nu/nu0 ^ [a+
+    #               b*log(nu/nu0) +
+    #               c*log(nu/nu0)**2 +
+    #               d*log(nu/nu0)**3]
+
     # 1GC Calibration
     recipe.add("cab/casa_setjy", "init_flux_scaling",
         {
             "msname"        :   msfile,
             "field"         :   str(bandpass_cal),
-            # Relies on a custom casa docker image with
-            # southern calibrators
-            "standard"      :   'Perley-Butler 2013',
-            #"fluxdensity"   :   24.5372,
-            #"spix"          :   -1.02239,
-            #"reffreq"       :   '900MHz',
+            "standard"      :   'manual',
+            "fluxdensity"   :   flux_density,
+            "spix"          :   -1.02239,  #TODO: fill coefficients
+            "reffreq"       :   freq_0 / 1e6,
             "usescratch"    :   False,
             "scalebychan"   :   True,
             "spw"           :   '',
@@ -477,16 +528,40 @@ for o in observations:
         input=OUTPUT, output=OUTPUT,
         label="plot_ampuvdist:: Diagnostic plot of amplitude with uvdist")
 
+    #Diagnostic: phase vs uv dist of the bandpass calibrator
+    recipe.add("cab/casa_plotms", "plot_phase_v_uv_dist_of_bp_calibrator",
+        {
+            "msname"            : msfile,
+            "xaxis"             : "uvdist",
+            "yaxis"             : "phase",
+            "xdatacolumn"       : "corrected",
+            "ydatacolumn"       : "corrected",
+            "field"             : str(bandpass_cal),
+            "correlation"       : "XX,YY",
+            "avgchannel"        : "15",
+            "avgtime"           : "15",
+            "coloraxis"         : "channel",
+            "expformat"         : "png",
+            "exprange"          : "all",
+            "plotfile"          : basename + "_" +
+                                  source_name[bandpass_cal] + "_" +
+                                  "ampuvdist.png",
+        },
+        input=OUTPUT, output=OUTPUT,
+        label="plot_phaseuvdist:: Diagnostic plot of phase with uvdist")
+
     # Diagnostic: amplitude vs phase of bp calibrator per antenna
     recipe.add("cab/casa_plotms", "plot_amp_v_phase_of_bp_calibrator",
         {
             "msname"            : msfile,
-            "xaxis"             : "phase",
-            "yaxis"             : "amplitude",
+            "xaxis"             : "amplitude",
+            "yaxis"             : "phase",
             "xdatacolumn"       : "corrected",
             "ydatacolumn"       : "corrected",
             "field"             : str(bandpass_cal),
-            "iteraxis"          : "antenna",
+            # auto correlations will not be flagged no use
+            # plotting them
+            #"iteraxis"          : "antenna",
             "correlation"       : "XX,YY",
             "avgchannel"        : "15",
             "avgtime"           : "15",
@@ -814,6 +889,7 @@ for o in observations:
                  "autoflag_corrected_vis",
                  "flag_baseline_phases",
                  "plot_ampuvdist",
+                 "plot_phaseuvdist",
                  "plot_phaseball",
                  "plot_amp_freq",
                  "plot_phase_time",
@@ -822,20 +898,22 @@ for o in observations:
         steps += ["image_%d" % ti for ti in targets]
         steps += ["image_bandpass", "image_gain"] # diagnostic only
 
-        ## Initial selfcal loop
-        #steps += ["move_corrdata_to_data",
-        #          "flagset_saveas_legacy",
-        #         ]
-        ##for ti in targets:
-        #    steps += ["source_find_%d" % ti,
-        #              "stitch_cube_%d" % ti,
-        #              "SPI_%d" % ti,
-        #              "SELFCAL0_%d" % ti,
-        #              "image_SC0_%d" % ti,
-        #              "MSK_SC0_%d" % ti,
-        #             ]
-        ## diagnostic only:
-        #steps += ["image_stokesv_residue_%d" % ti for ti in targets]
+        # Initial selfcal loop
+        steps += ["move_corrdata_to_data",
+                  "flagset_saveas_legacy",
+                 ]
+
+        for ti in targets:
+            steps += ["source_find_%d" % ti,
+                      "stitch_cube_%d" % ti,
+                      "SPI_%d" % ti,
+                      "SELFCAL0_%d" % ti,
+                      "image_SC0_%d" % ti,
+                      "MSK_SC0_%d" % ti,
+                     ]
+
+        # diagnostic only:
+        steps += ["image_stokesv_residue_%d" % ti for ti in targets]
 
         # RUN FOREST RUN!!!
         recipe.run(steps)
