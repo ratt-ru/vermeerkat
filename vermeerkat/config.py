@@ -19,12 +19,19 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import argparse
-import ConfigParser
 import itertools
 import os
 import sys
 
+import ruamel.yaml
+
 import vermeerkat
+
+def is_valid_file(parser, arg):
+    if not os.path.exists(arg):
+        parser.error("The file '%s' does not exist!" % arg)
+
+    return arg
 
 def general_section_parser():
     """ Parses the general section """
@@ -40,48 +47,14 @@ def general_section_parser():
 
     return parser
 
-def rfi_mask_section_parser():
-    """ Parsers the aoflagger section """
-    parser = argparse.ArgumentParser("RFI Mask Section")
-
-    parser.add_argument('--rfi-mask-file',
-        default='',
-        help='Filename of the RFI Mask File')
-
-    return parser
-
-def wsclean_section_parser():
-    """ Parses the wsclean section """
-    parser = argparse.ArgumentParser("WSCLEAN Section")
-
-    return parser
-
-def aoflagger_section_parser():
-    """ Parsers the aoflagger section """
-    parser = argparse.ArgumentParser("AOFlagger")
-
-    parser.add_argument('--firstpass-strategy-file',
-        default='',
-        help="Filename of the AOFlagger Strategy File used for first pass RFI flagging (pre-cross-cal)")
-    parser.add_argument('--secondpass-strategy-file',
-        default='',
-        help="Filename of the AOFlagger Strategy File user for second pass RFI flagging (post-cross-cal)")
-    return parser
-
 # Dictionary of argument parsers for particular sections
 # Keys should correspond to associated sections in the
 _ARGPARSERS = {
     'general': general_section_parser,
-    'rfimask' : rfi_mask_section_parser,
-    'aoflagger' : aoflagger_section_parser,
-    'wsclean' : wsclean_section_parser,
 }
 
 def configuration(args=None):
     """ Extract """
-
-    # Create parser object
-    parser = argparse.ArgumentParser("VerMeerKAT")
 
     #=========================================================
     # Handle the configuration file argument first,
@@ -90,11 +63,8 @@ def configuration(args=None):
     # default configuration file
     #=========================================================
 
-    def is_valid_file(parser, arg):
-        if not os.path.exists(arg):
-            parser.error("The file %s does not exist!" % arg)
-
-        return arg
+    # Create parser object
+    parser = argparse.ArgumentParser("VerMeerKAT")
 
     # Configuration file
     parser.add_argument('-c', '--config',
@@ -111,22 +81,26 @@ def configuration(args=None):
 
     # Load in configuration options from the configuration file
     vermeerkat.log.info("Loading defaults from {}".format(args.config))
-    config_parser = ConfigParser.SafeConfigParser()
-    # Convert dashes in options to underscores
-    # as this is how argparse will treat them
-    config_parser.optionxform = xformer
-    # Read the configuration file and extract options from the General section
-    config_parser.read(args.config)
+
+    with open(args.config, 'r') as f:
+        file_config = ruamel.yaml.load(f, ruamel.yaml.RoundTripLoader)
 
     def _section_args(sections, args):
-        """ Yields namedtuples containing arguments for each section """
+        """ Yields argparse.Namespace() containing arguments for each section """
 
         for section, (cfg_section, parser_factory) in sections.iteritems():
             # Extract configuration file options for this section
             # and use them as defaults for returning results
 
-            section_defaults = ({} if cfg_section is None
-                else dict(config_parser.items(cfg_section)))
+            section_defaults = file_config.get(cfg_section, None)
+
+            # cfg_section might also be None...
+            if section_defaults is None:
+                section_defaults = {}
+
+            # Transform keys
+            section_defaults = { xformer(k): v for k, v
+                                in section_defaults.iteritems() }
 
             # If present, use the argument parser to parse
             # (and validate) arguments
@@ -137,18 +111,21 @@ def configuration(args=None):
             # Otherwise just dump the section options into a namedtuple
             # that looks like one produced by argparse
             else:
-                vermeerkat.log.warn("No argument parser "
-                    "exists for Section '{}'. Options will "
-                    "not be validated for this section.".format(cfg_section))
+                # vermeerkat.log.warn("No argument parser "
+                #     "exists for Section '{}'. Options will "
+                #     "not be validated for this section.".format(cfg_section))
 
                 section_args = argparse.Namespace(**section_defaults)
 
             yield section, section_args
 
+        if len(args) > 0:
+            vermeerkat.log.warn("'{}' arguments were not parsed".format(args))
+
     # Find the list of sections that should be parsed.
     # Obtained from sections in the config file and sections in
     # the _ARGPARSERS dictionary.
-    cfg_sections = { xformer(s): s for s in config_parser.sections() }
+    cfg_sections = { xformer(s): s for s in file_config.keys() }
     argp_sections = { xformer(k): pf for k, pf in _ARGPARSERS.iteritems() }
     all_sections = set(itertools.chain(cfg_sections.iterkeys(),
         argp_sections.iterkeys()))
