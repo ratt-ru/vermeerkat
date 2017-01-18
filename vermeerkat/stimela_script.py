@@ -869,7 +869,7 @@ for o in observations:
         # Add Flagging and 1GC steps
         steps = ["convert",
                  "prepms",
-                 "mask",
+                 "rfimask",
                  "autoflag",
                  "flag_bandstart",
                  "flag_bandend",
