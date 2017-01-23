@@ -87,6 +87,9 @@ Created by AOFlagger 2.7.1 (2015-07-01)
       <action type="TimeSelectionAction">
         <threshold>4</threshold>
       </action>
+      <action type="SetFlaggingAction">
+        <new-flagging>6</new-flagging>
+      </action>
     </children>
   </action>
 </rfi-strategy>
