@@ -10,7 +10,7 @@ Created by AOFlagger 2.7.1 (2015-07-01)
         <new-image>1</new-image>
       </action>
       <action type="SetFlaggingAction">
-        <new-flagging>0</new-flagging>
+        <new-flagging>6</new-flagging>
       </action>
       <action type="ForEachPolarisationBlock">
         <on-xx>1</on-xx>
@@ -86,6 +86,9 @@ Created by AOFlagger 2.7.1 (2015-07-01)
       </action>
       <action type="TimeSelectionAction">
         <threshold>3.5</threshold>
+      </action>
+      <action type="SetFlaggingAction">
+        <new-flagging>6</new-flagging>
       </action>
     </children>
   </action>

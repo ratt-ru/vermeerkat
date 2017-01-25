@@ -119,6 +119,9 @@ for o in observations:
 
     bandpass_cal_candidates = []
     gain_cal_candidates = []
+    bandpass_coordinates = []
+    gaincal_coordinates = []
+    target_coordinates = []
     targets = []
     source_name = []
 
@@ -133,15 +136,19 @@ for o in observations:
                   target) in d.scans() if state == "track"]
 
     for si, scan in enumerate(scans):
+        catagorized_source = False
         if scan[1] in source_name:
             continue
         if "bpcal" in scan[2]:
             bandpass_cal_candidates += [len(source_name)]
-        elif "gaincal" in scan[2]:
+            catagorized_source = True
+        if "gaincal" in scan[2]:
             gain_cal_candidates += [len(source_name)]
-        elif "target" in scan[2]:
+            catagorized_source = True
+        if "target" in scan[2]:
             targets += [len(source_name)]
-        else:
+            catagorized_source = True
+        if not catagorized_source:
             vermeerkat.log.warn("Not using observed source %s" % source_string[0])
             continue
         source_name += [scan[1]]
@@ -157,13 +164,14 @@ for o in observations:
                            "bandpass calibrators" % o["ProductName"])
 
     # select gaincal candidate closest to the centre of the cluster of targets
-    target_coordinates = [scans[ti][3] for ti, t in enumerate(targets)]
-    gaincal_coordinates = [scans[gi][3] for gi, g in enumerate(gain_cal_candidates)]
-    mean_target_position = np.mean(np.array(target_coordinates), axis=0)
-    lmdistances = np.sum((np.array(gaincal_coordinates) - mean_target_position)**2,
+    target_coordinates = [[s[3] for s in scans if s[1] == source_name[t]][0] for t in targets]
+    gaincal_coordinates = [[s[3] for s in scans if s[1] == source_name[t]][0] for t in gain_cal_candidates]
+    mean_target_position = np.mean(np.array(target_coordinates), 
+                                   axis=0)
+    lmdistances = np.sum((np.array(gaincal_coordinates) - 
+                         mean_target_position)**2, 
                          axis=0)
-    gain_cal = np.argmin(lmdistances)
-
+    gain_cal = gain_cal_candidates[np.argmin(lmdistances)]
     # never use the gain calibrator for a bandpass calibrator
     bandpass_cal_candidates = [x for x in bandpass_cal_candidates if x != gain_cal]
     bp_cand_obs_len = [reduce((lambda x, y: x + y),
@@ -177,6 +185,14 @@ for o in observations:
                                       scans))))
                            for cand in bandpass_cal_candidates]
     bpcal_sol_int = bandpass_scan_times[bandpass_cal_candidates.index(bandpass_cal)]
+
+    # compute the observation time spent on gain calibrator:
+    gaincal_scan_times = [reduce((lambda x, y: x + y),
+                                list(map((lambda q: q[4]),
+                                     filter((lambda z: z[1] == source_name[gc]),
+                                            scans))))
+                         for gc in gain_cal_candidates]
+ 
 
     # compute the observation time spent on targets:
     target_scan_times = [reduce((lambda x, y: x + y),
@@ -198,8 +214,11 @@ for o in observations:
              obs_min,
              obs_sec))
 
-    vermeerkat.log.info("Will use '%s' (%d) as a gain calibrator" %
-        (source_name[gain_cal], gain_cal))
+    vermeerkat.log.info("Will use '%s' (%d) as a closest gain calibrator (total "
+        "observation time: %.2f mins)" %
+        (source_name[gain_cal], 
+         gain_cal, 
+         gaincal_scan_times[gain_cal_candidates.index(gain_cal)] / 60.0))
     vermeerkat.log.info("Will use '%s' (%d) as a bandpass calibrator (total "
         "observation time: %.2f mins, minimum scan time: %.2f mins)" %
         (source_name[bandpass_cal],
@@ -223,7 +242,7 @@ for o in observations:
         (freq_0 / 1e6, (nchans // 2) * chan_bandwidth / 1e6, nchans))
 
     # All good to go fire up the pipeline
-    recipe = stimela.Recipe("Imaging Pipeline", ms_dir=MSDIR)
+    recipe = stimela.Recipe("1GC Pipeline", ms_dir=MSDIR)
 
     # Convert
     recipe.add("cab/h5toms", "h5toms",
@@ -260,6 +279,28 @@ for o in observations:
         },
         input=INPUT, output=OUTPUT,
         label="autoflag:: Auto Flagging ms")
+
+    #Custom user specified flags
+    userflags = {"msname" : msfile}
+    if cfg.flag_userflags.mode is not None:
+        userflags["mode"] = cfg.flag_userflags.mode
+    if cfg.flag_userflags.field is not None:
+        userflags["field"] = cfg.flag_userflags.field
+    if cfg.flag_userflags.antenna is not None:
+        userflags["antenna"] = cfg.flag_userflags.antenna
+    if cfg.flag_userflags.scan is not None:
+        userflags["scan"] = cfg.flag_userflags.scan
+    if cfg.flag_userflags.timerange is not None:
+        userflags["timerange"] = cfg.flag_userflags.timerange
+    if cfg.flag_userflags.spw is not None:
+        userflags["spw"] = cfg.flag_userflags.spw
+    if cfg.flag_userflags.autocorr is not None:
+        userflags["autocorr"] = cfg.flag_userflags.autocorr
+  
+    recipe.add("cab/casa_flagdata", "flag_userflags",
+        userflags,
+        input=OUTPUT, output=OUTPUT,
+        label="flag_userflags:: Specify any additional flags from user")
 
     recipe.add("cab/casa_flagdata", "flag_bad_start_channels",
         {
@@ -344,7 +385,7 @@ for o in observations:
             "field"         :   str(bandpass_cal),
             "standard"      :   cfg.setjy.standard,
             "fluxdensity"   :   I,
-            "spix"          :   ",".join(str(x) for x in [a, b, c, d]),
+            "spix"          :   [a, b, c, d],
             "reffreq"       :   "%.2fGHz" % (freq_0 / 1e9),
             "usescratch"    :   cfg.setjy.usescratch,
             "scalebychan"   :   cfg.setjy.scalebychan,
@@ -358,16 +399,16 @@ for o in observations:
     # decorrelation on the longest baselines, so
     # better calibrate for this one (we can use the
     # bright bandpass and gain calibrator sources).
-    recipe.add("cab/casa_gaincal", "delay cal",
+    recipe.add("cab/casa_gaincal", "delay_cal",
         {
             "msname"        : msfile,
-            "field"         : ",".join([str(bandpass_cal),
-                                        str(gain_cal)]),
+            "field"         : str(gain_cal),
             "gaintype"      : cfg.delaycal.gaintype,
             "solint"        : cfg.delaycal.solint,
             "minsnr"        : cfg.delaycal.minsnr,
             "refant"        : refant,
             "caltable"      : delaycal_table,
+            "calmode"       : cfg.delaycal.calmode,
         },
         input=OUTPUT, output=OUTPUT,
         label="delaycal:: Delay calibration")
@@ -459,7 +500,7 @@ for o in observations:
                                  phasecal_table,
                                  bpasscal_table,
                                  fluxcal_table],
-            "gainfield"     :   [bandpass_cal,
+            "gainfield"     :   [gain_cal,
                                  bandpass_cal,
                                  bandpass_cal,
                                  gain_cal],
@@ -515,6 +556,7 @@ for o in observations:
             "ydatacolumn"       : cfg.plot_ampuvdist.ydatacolumn,
             "field"             : str(bandpass_cal),
             "correlation"       : cfg.plot_ampuvdist.correlation,
+            "iteraxis"          : cfg.plot_ampuvdist.iteraxis,
             "avgchannel"        : cfg.plot_ampuvdist.avgchannel,
             "avgtime"           : cfg.plot_ampuvdist.avgtime,
             "coloraxis"         : cfg.plot_ampuvdist.coloraxis,
@@ -537,6 +579,7 @@ for o in observations:
             "ydatacolumn"       : cfg.plot_phaseuvdist.ydatacolumn,
             "field"             : str(bandpass_cal),
             "correlation"       : cfg.plot_phaseuvdist.correlation,
+            "iteraxis"          : cfg.plot_phaseuvdist.iteraxis,
             "avgchannel"        : cfg.plot_phaseuvdist.avgchannel,
             "avgtime"           : cfg.plot_phaseuvdist.avgtime,
             "coloraxis"         : cfg.plot_phaseuvdist.coloraxis,
@@ -559,6 +602,7 @@ for o in observations:
             "ydatacolumn"       : cfg.plot_phaseball.ydatacolumn,
             "field"             : str(bandpass_cal),
             "correlation"       : cfg.plot_phaseball.correlation,
+            "iteraxis"          : cfg.plot_phaseball.iteraxis,
             "avgchannel"        : cfg.plot_phaseball.avgchannel,
             "avgtime"           : cfg.plot_phaseball.avgtime,
             "coloraxis"         : cfg.plot_phaseball.coloraxis,
@@ -581,6 +625,7 @@ for o in observations:
             "ydatacolumn"       : cfg.plot_amp_freq.ydatacolumn,
             "field"             : str(bandpass_cal),
             "correlation"       : cfg.plot_amp_freq.correlation,
+            "iteraxis"          : cfg.plot_amp_freq.iteraxis,
             "avgchannel"        : cfg.plot_amp_freq.avgchannel,
             "avgtime"           : cfg.plot_amp_freq.avgtime,
             "coloraxis"         : cfg.plot_amp_freq.coloraxis,
@@ -606,6 +651,7 @@ for o in observations:
             "ydatacolumn"       : cfg.plot_phase_time.ydatacolumn,
             "field"             : str(bandpass_cal),
             "correlation"       : cfg.plot_phase_time.correlation,
+            "iteraxis"          : cfg.plot_phase_time.iteraxis,
             "avgchannel"        : cfg.plot_phase_time.avgchannel,
             "avgtime"           : cfg.plot_phase_time.avgtime,
             "coloraxis"         : cfg.plot_phase_time.coloraxis,
@@ -629,6 +675,7 @@ for o in observations:
             "ydatacolumn"       : cfg.plot_phase_freq.ydatacolumn,
             "field"             : str(bandpass_cal),
             "correlation"       : cfg.plot_phase_freq.correlation,
+            "iteraxis"          : cfg.plot_phase_freq.iteraxis,
             "avgchannel"        : cfg.plot_phase_freq.avgchannel,
             "avgtime"           : cfg.plot_phase_freq.avgtime,
             "coloraxis"         : cfg.plot_phase_freq.coloraxis,
@@ -712,6 +759,46 @@ for o in observations:
         input=OUTPUT, output=OUTPUT,
         label="image_gain::wsclean")
 
+    try:
+        # Add Flagging and 1GC steps
+        onegcsteps = ["convert",
+                      "prepms",
+                      "rfimask",
+                      "autoflag",
+                      "flag_userflags",
+                      "flag_bandstart",
+                      "flag_bandend",
+                      "flag_autocorrs",
+                      "recompute_uvw", 
+                      "setjy",
+                      "delaycal",
+                      "phase0",
+                      "bandpass",
+                      "gaincal",
+                      "fluxscale",
+                      "applycal",
+                      "autoflag_corrected_vis",
+                      "flag_baseline_phases",
+                      "plot_ampuvdist",
+                      "plot_phaseuvdist",
+                      "plot_phaseball",
+                      "plot_amp_freq",
+                      "plot_phase_time",
+                      "plot_phase_freq",
+                     ]
+#        onegcsteps += ["image_%d" % ti for ti in targets]
+#        onegcsteps += ["image_bandpass", "image_gain"] # diagnostic only
+       
+        # RUN FOREST RUN!!!
+        recipe.run(onegcsteps)
+
+    except stimela.PipelineException as e:
+        print 'completed {}'.format([c.label for c in e.completed])
+        print 'failed {}'.format(e.failed.label)
+        print 'remaining {}'.format([c.label for c in e.remaining])
+        raise
+    
+    recipe = stimela.Recipe("2GC Pipeline", ms_dir=MSDIR)
     # Copy CORRECTED_DATA to DATA, so we can start selfcal
     recipe.add("cab/msutils", "shift_columns",
         {
@@ -866,56 +953,29 @@ for o in observations:
               "V as diagnostic" % ti)
 
     try:
-        # Add Flagging and 1GC steps
-        steps = ["convert",
-                 "prepms",
-                 "rfimask",
-                 "autoflag",
-                 "flag_bandstart",
-                 "flag_bandend",
-                 "flag_autocorrs",
-                 "recompute_uvw",
-                 "setjy",
-                 "delaycal",
-                 "phase0",
-                 "bandpass",
-                 "gaincal",
-                 "fluxscale",
-                 "applycal",
-                 "autoflag_corrected_vis",
-                 "flag_baseline_phases",
-                 "plot_ampuvdist",
-                 "plot_phaseuvdist",
-                 "plot_phaseball",
-                 "plot_amp_freq",
-                 "plot_phase_time",
-                 "plot_phase_freq",
-                ]
-        steps += ["image_%d" % ti for ti in targets]
-        steps += ["image_bandpass", "image_gain"] # diagnostic only
-
         # Initial selfcal loop
-        steps += ["move_corrdata_to_data",
-                  "flagset_saveas_legacy",
-                 ]
+        twogcsteps = ["move_corrdata_to_data",
+                    "flagset_saveas_legacy",
+                   ]
 
         for ti in targets:
-            steps += ["source_find_%d" % ti,
-                      "stitch_cube_%d" % ti,
-                      "SPI_%d" % ti,
-                      "SELFCAL0_%d" % ti,
-                      "image_SC0_%d" % ti,
-                      "MSK_SC0_%d" % ti,
-                     ]
+            twogcsteps += ["source_find_%d" % ti,
+                           "stitch_cube_%d" % ti,
+                           "SPI_%d" % ti,
+                           "SELFCAL0_%d" % ti,
+                           "image_SC0_%d" % ti,
+                           "MSK_SC0_%d" % ti,
+                          ]
 
         # diagnostic only:
-        steps += ["image_stokesv_residue_%d" % ti for ti in targets]
+        twogcsteps += ["image_stokesv_residue_%d" % ti for ti in targets]
 
         # RUN FOREST RUN!!!
-        recipe.run(steps)
+        #recipe.run(twogcsteps)
 
     except stimela.PipelineException as e:
         print 'completed {}'.format([c.label for c in e.completed])
         print 'failed {}'.format(e.failed.label)
         print 'remaining {}'.format([c.label for c in e.remaining])
         raise
+
