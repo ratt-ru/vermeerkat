@@ -10,7 +10,7 @@ inputs:
     inputBinding:
       position: 1
 outputs:
-  h5:
+  downloaded:
     type: File
     outputBinding:
       glob: "*"

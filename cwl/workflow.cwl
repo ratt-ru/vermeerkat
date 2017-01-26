@@ -6,17 +6,18 @@ inputs:
 outputs:
   ms:
     type: Directory
-    outputSource: ms
+    outputSource: h5toms/ms
+
 
 steps:
   curl:
     run: curl.cwl
     in:
       url: url
-    out: [h5]
+    out: [downloaded]
 
-  compile:
+  h5toms:
     run: h5toms.cwl
     in:
-      h5: h5
+      h5: curl/downloaded
     out: [ms]

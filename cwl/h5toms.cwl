@@ -3,14 +3,14 @@ class: CommandLineTool
 hints:
   DockerRequirement:
     dockerPull: vermeerkat/h5toms
-baseCommand: [h5toms.py]
+baseCommand: [h5toms.py, -o, result.ms]
 inputs:
   h5:
-    type: file
+    type: File
     inputBinding:
       position: 1
 outputs:
   ms:
     type: Directory
     outputBinding:
-      glob: "*"
+      glob: "result.ms"
