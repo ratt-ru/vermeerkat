@@ -280,27 +280,29 @@ for o in observations:
         input=INPUT, output=OUTPUT,
         label="autoflag:: Auto Flagging ms")
 
-    #Custom user specified flags
-    userflags = {"msname" : msfile}
-    if cfg.flag_userflags.mode is not None:
-        userflags["mode"] = cfg.flag_userflags.mode
-    if cfg.flag_userflags.field is not None:
-        userflags["field"] = cfg.flag_userflags.field
-    if cfg.flag_userflags.antenna is not None:
-        userflags["antenna"] = cfg.flag_userflags.antenna
-    if cfg.flag_userflags.scan is not None:
-        userflags["scan"] = cfg.flag_userflags.scan
-    if cfg.flag_userflags.timerange is not None:
-        userflags["timerange"] = cfg.flag_userflags.timerange
-    if cfg.flag_userflags.spw is not None:
-        userflags["spw"] = cfg.flag_userflags.spw
-    if cfg.flag_userflags.autocorr is not None:
-        userflags["autocorr"] = cfg.flag_userflags.autocorr
-  
-    recipe.add("cab/casa_flagdata", "flag_userflags",
-        userflags,
-        input=OUTPUT, output=OUTPUT,
-        label="flag_userflags:: Specify any additional flags from user")
+    # Custom user specified flags
+    # Casa does not sensibly do nothing if the defaults are specified
+    # removing this step
+#    userflags = {"msname" : msfile}
+#    if cfg.flag_userflags.mode is not None:
+#        userflags["mode"] = cfg.flag_userflags.mode
+#    if cfg.flag_userflags.field is not None:
+#        userflags["field"] = cfg.flag_userflags.field
+#    if cfg.flag_userflags.antenna is not None:
+#        userflags["antenna"] = cfg.flag_userflags.antenna
+#    if cfg.flag_userflags.scan is not None:
+#        userflags["scan"] = cfg.flag_userflags.scan
+#    if cfg.flag_userflags.timerange is not None:
+#        userflags["timerange"] = cfg.flag_userflags.timerange
+#    if cfg.flag_userflags.spw is not None:
+#        userflags["spw"] = cfg.flag_userflags.spw
+#    if cfg.flag_userflags.autocorr is not None:
+#        userflags["autocorr"] = cfg.flag_userflags.autocorr
+#  
+#    recipe.add("cab/casa_flagdata", "flag_userflags",
+#        userflags,
+#        input=OUTPUT, output=OUTPUT,
+#        label="flag_userflags:: Specify any additional flags from user")
 
     recipe.add("cab/casa_flagdata", "flag_bad_start_channels",
         {
@@ -537,7 +539,7 @@ for o in observations:
             "cal_field"              : str(bandpass_cal),
             "valid_phase_range"      : cfg.flag_baseline_phases.valid_phase_range,
             "max_invalid_datapoints" : cfg.flag_baseline_phases.max_invalid_datapoints,
-            "output_dir"             : os.environ["HOME"] + "/" + OUTPUT, #where is this thing mapped to inside the container
+            "output_dir"             : os.environ["HOME"] + "/" + OUTPUT + "/", #where is this thing mapped to inside the container
             "nrows_chunk"            : cfg.flag_baseline_phases.nrows_chunk,
             "simulate"               : cfg.flag_baseline_phases.simulate,
         },
@@ -765,11 +767,10 @@ for o in observations:
                       "prepms",
                       "rfimask",
                       "autoflag",
-                      "flag_userflags",
                       "flag_bandstart",
                       "flag_bandend",
                       "flag_autocorrs",
-                      "recompute_uvw", 
+                      "recompute_uvw",
                       "setjy",
                       "delaycal",
                       "phase0",
@@ -786,9 +787,9 @@ for o in observations:
                       "plot_phase_time",
                       "plot_phase_freq",
                      ]
-#        onegcsteps += ["image_%d" % ti for ti in targets]
-#        onegcsteps += ["image_bandpass", "image_gain"] # diagnostic only
-       
+        onegcsteps += ["image_%d" % ti for ti in targets]
+        onegcsteps += ["image_bandpass", "image_gain"] # diagnostic only
+ 
         # RUN FOREST RUN!!!
         recipe.run(onegcsteps)
 
@@ -797,7 +798,7 @@ for o in observations:
         print 'failed {}'.format(e.failed.label)
         print 'remaining {}'.format([c.label for c in e.remaining])
         raise
-    
+ 
     recipe = stimela.Recipe("2GC Pipeline", ms_dir=MSDIR)
     # Copy CORRECTED_DATA to DATA, so we can start selfcal
     recipe.add("cab/msutils", "shift_columns",
@@ -971,7 +972,7 @@ for o in observations:
         twogcsteps += ["image_stokesv_residue_%d" % ti for ti in targets]
 
         # RUN FOREST RUN!!!
-        #recipe.run(twogcsteps)
+        recipe.run(twogcsteps)
 
     except stimela.PipelineException as e:
         print 'completed {}'.format([c.label for c in e.completed])
