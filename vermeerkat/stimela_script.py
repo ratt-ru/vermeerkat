@@ -168,9 +168,11 @@ for o in observations:
     gaincal_coordinates = [[s[3] for s in scans if s[1] == source_name[t]][0] for t in gain_cal_candidates]
     mean_target_position = np.mean(np.array(target_coordinates), 
                                    axis=0)
-    lmdistances = np.sum((np.array(gaincal_coordinates) - 
-                         mean_target_position)**2, 
-                         axis=0)
+
+    lmdistances = np.sum((np.array(gaincal_coordinates) -
+                         mean_target_position)**2,
+                         axis=1)
+
     gain_cal = gain_cal_candidates[np.argmin(lmdistances)]
     # never use the gain calibrator for a bandpass calibrator
     bandpass_cal_candidates = [x for x in bandpass_cal_candidates if x != gain_cal]
