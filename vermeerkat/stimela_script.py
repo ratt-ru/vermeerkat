@@ -256,13 +256,6 @@ for o in observations:
         input=INPUT, output=OUTPUT,
         label="convert::h5toms")
 
-    recipe.add("cab/msutils", "msutils",
-        {
-            'command'    : 'prep',
-            'msname'     : msfile,
-        },
-        input=OUTPUT, output=OUTPUT,
-        label="prepms::Adds flagsets")
 
     # RFI and bad channel flagging
     recipe.add("cab/rfimasker", "mask_stuff",
@@ -773,10 +766,12 @@ for o in observations:
         input=OUTPUT, output=OUTPUT,
         label="image_gain::wsclean")
 
+
+
+
     try:
         # Add Flagging and 1GC steps
         onegcsteps = ["convert",
-                      "prepms",
                       "rfimask",
                       "autoflag",
                       "flag_bandstart",
@@ -812,6 +807,17 @@ for o in observations:
         raise
  
     recipe = stimela.Recipe("2GC Pipeline", ms_dir=MSDIR)
+
+    # Add bitflag column. To keep track of flagsets
+    recipe.add("cab/msutils", "msutils",
+        {
+            'command'    : 'prep',
+            'msname'     : msfile,
+        },
+        input=OUTPUT, output=OUTPUT,
+        label="prepms::Adds flagsets")
+
+
     # Copy CORRECTED_DATA to DATA, so we can start selfcal
     recipe.add("cab/msutils", "shift_columns",
         {
@@ -967,7 +973,8 @@ for o in observations:
 
     try:
         # Initial selfcal loop
-        twogcsteps = ["move_corrdata_to_data",
+        twogcsteps = ["prepms",
+                    "move_corrdata_to_data",
                     "flagset_saveas_legacy",
                    ]
 
