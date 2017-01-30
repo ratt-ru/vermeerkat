@@ -352,51 +352,61 @@ for o in observations:
         label="recompute_uvw:: Recompute MeerKAT uvw coordinates")
 
     #Run SetJY with our database of southern calibrators
-    if source_name[bandpass_cal] not in calibrator_db:
-        raise RuntimeError("Looks like your flux reference '%s' is not "
+    if source_name[bandpass_cal] in calibrator_db:
+        vermeerkat.log.warn("Looks like your flux reference '%s' is not "
                            "in our standard. Try pulling the latest "
                            "VermeerKAT or if you have done "
                            "so report this issue" % source_name[bandpass_cal])
 
-    aghz = calibrator_db[source_name[bandpass_cal]]["a_ghz"]
-    bghz = calibrator_db[source_name[bandpass_cal]]["b_ghz"]
-    cghz = calibrator_db[source_name[bandpass_cal]]["c_ghz"]
-    dghz = calibrator_db[source_name[bandpass_cal]]["d_ghz"]
+        aghz = calibrator_db[source_name[bandpass_cal]]["a_ghz"]
+        bghz = calibrator_db[source_name[bandpass_cal]]["b_ghz"]
+        cghz = calibrator_db[source_name[bandpass_cal]]["c_ghz"]
+        dghz = calibrator_db[source_name[bandpass_cal]]["d_ghz"]
 
-    # Find the brightness at reference frequency
-    I, a, b, c, d = convert_pb_to_casaspi(freq_0 / 1e9 -
-                                          (nchans // 2) * chan_bandwidth / 1e9,
-                                          freq_0 / 1e9 +
-                                          (nchans // 2) * chan_bandwidth / 1e9,
-                                          freq_0 / 1e9,
-                                          aghz,
-                                          bghz,
-                                          cghz,
-                                          dghz)
+        # Find the brightness at reference frequency
+        I, a, b, c, d = convert_pb_to_casaspi(freq_0 / 1e9 -
+                                              (nchans // 2) * chan_bandwidth / 1e9,
+                                              freq_0 / 1e9 +
+                                              (nchans // 2) * chan_bandwidth / 1e9,
+                                              freq_0 / 1e9,
+                                              aghz,
+                                              bghz,
+                                              cghz,
+                                              dghz)
 
-    vermeerkat.log.info("Using bandpass calibrator %s "
-                        "with brightness of %.4f Jy "
-                        "(spix = [%.6f, %.6f, %.6f, %.6f]) "
-                        "(@ %.2f MHz) "
-                        "as the flux scale reference" %
-                        (source_name[bandpass_cal],
-                         I, a, b, c, d,
-                         freq_0 / 1e6))
-    # 1GC Calibration
-    recipe.add("cab/casa_setjy", "init_flux_scaling",
-        {
-            "msname"        :   msfile,
-            "field"         :   str(bandpass_cal),
-            "standard"      :   cfg.setjy.standard,
-            "fluxdensity"   :   I,
-            "spix"          :   [a, b, c, d],
-            "reffreq"       :   "%.2fGHz" % (freq_0 / 1e9),
-            "usescratch"    :   cfg.setjy.usescratch,
-            "scalebychan"   :   cfg.setjy.scalebychan,
-            "spw"           :   cfg.setjy.spw,
-        },
-        input=OUTPUT, output=OUTPUT,
-        label="setjy:: Initial flux density scaling")
+        vermeerkat.log.info("Using bandpass calibrator %s "
+                            "with brightness of %.4f Jy "
+                            "(spix = [%.6f, %.6f, %.6f, %.6f]) "
+                            "(@ %.2f MHz) "
+                            "as the flux scale reference" %
+                            (source_name[bandpass_cal],
+                             I, a, b, c, d,
+                             freq_0 / 1e6))
+        # 1GC Calibration
+        recipe.add("cab/casa_setjy", "init_flux_scaling",
+            {
+                "msname"        :   msfile,
+                "field"         :   str(bandpass_cal),
+                "standard"      :   cfg.setjy_manual.standard,
+                "fluxdensity"   :   I,
+                "spix"          :   [a, b, c, d],
+                "reffreq"       :   "%.2fGHz" % (freq_0 / 1e9),
+                "usescratch"    :   cfg.setjy_manual.usescratch,
+                "scalebychan"   :   cfg.setjy_manual.scalebychan,
+                "spw"           :   cfg.setjy_manual.spw,
+            },
+            input=OUTPUT, output=OUTPUT,
+            label="setjy:: Initial flux density scaling")
+    else:
+        # If model is not in @Ben's southern calibrators, then use CASA model. 
+        # If this is the case, the standard must be specified in the config file
+        recipe.add('cab/casa_setjy', 'flux_scaling', {
+            "msname"    :   msfile,
+            "standard"  :   cfg.setjy_auto.standard,
+            "field"     :   str(bandpass_cal)
+            },
+            input=OUTPUT, output=OUTPUT,
+            label="setjy:: Initial flux density scaling")
 
     # @mauch points out some antenna positions may
     # be slightly off. This will cause a noticible
