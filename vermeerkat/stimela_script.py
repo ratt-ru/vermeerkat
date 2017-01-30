@@ -135,23 +135,23 @@ for o in observations:
                   state,
                   target) in d.scans() if state == "track"]
 
-    for si, scan in enumerate(scans):
-        catagorized_source = False
-        if scan[1] in source_name:
+    for si, (target, name, tags, radec, length) in enumerate(scans):
+        categorised_source = False
+        if name in source_name:
             continue
-        if "bpcal" in scan[2]:
-            bandpass_cal_candidates += [len(source_name)]
-            catagorized_source = True
-        if "gaincal" in scan[2]:
-            gain_cal_candidates += [len(source_name)]
-            catagorized_source = True
-        if "target" in scan[2]:
-            targets += [len(source_name)]
-            catagorized_source = True
-        if not catagorized_source:
-            vermeerkat.log.warn("Not using observed source %s" % source_string[0])
+        if "bpcal" in tags:
+            bandpass_cal_candidates.append(len(source_name))
+            categorised_source = True
+        if "gaincal" in tags:
+            gain_cal_candidates.append(len(source_name))
+            categorised_source = True
+        if "target" in tags:
+            targets.append(len(source_name))
+            categorised_source = True
+        if not categorised_source:
+            vermeerkat.log.warn("Not using observed source %s" % name)
             continue
-        source_name += [scan[1]]
+        source_name += [name]
 
     if len(targets) < 1:
         raise RuntimeError("Observation %s does not have any "
@@ -166,11 +166,13 @@ for o in observations:
     # select gaincal candidate closest to the centre of the cluster of targets
     target_coordinates = [[s[3] for s in scans if s[1] == source_name[t]][0] for t in targets]
     gaincal_coordinates = [[s[3] for s in scans if s[1] == source_name[t]][0] for t in gain_cal_candidates]
-    mean_target_position = np.mean(np.array(target_coordinates), 
+    mean_target_position = np.mean(np.array(target_coordinates),
                                    axis=0)
-    lmdistances = np.sum((np.array(gaincal_coordinates) - 
-                         mean_target_position)**2, 
-                         axis=0)
+
+    lmdistances = np.sum((np.array(gaincal_coordinates) -
+                         mean_target_position)**2,
+                         axis=1)
+
     gain_cal = gain_cal_candidates[np.argmin(lmdistances)]
     # never use the gain calibrator for a bandpass calibrator
     bandpass_cal_candidates = [x for x in bandpass_cal_candidates if x != gain_cal]
@@ -192,7 +194,7 @@ for o in observations:
                                      filter((lambda z: z[1] == source_name[gc]),
                                             scans))))
                          for gc in gain_cal_candidates]
- 
+
 
     # compute the observation time spent on targets:
     target_scan_times = [reduce((lambda x, y: x + y),
