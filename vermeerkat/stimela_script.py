@@ -94,26 +94,27 @@ for o in observations:
     msfile = ''.join((basename, '.ms'))
 
     # Calibrator tables
-    delaycal_table = "%s.K0" % (basename)
-    phasecal_table = "%s.G0" % (basename)
-    ampcal_table = "%s.G1" % (basename)
-    fluxcal_table = "%s.fluxscale" % (basename)
-    bpasscal_table = "%s.B0" % (basename)
+    delaycal_table = "%s.K0:output" % (basename)
+    phasecal_table = "%s.G0:output" % (basename)
+    ampcal_table = "%s.G1:output" % (basename)
+    fluxcal_table = "%s.fluxscale:output" % (basename)
+    bpasscal_table = "%s.B0:output" % (basename)
 
     #Observation properties
-    refant = o["RefAntenna"]
+    refant = str(o["RefAntenna"])
     correlator_integration_time = o["DumpPeriod"]
     gain_sol_int = str(correlator_integration_time * 3) + "s"
     freq_0 = o["CenterFrequency"]
     nchans = o["NumFreqChannels"]
     chan_bandwidth = o["ChannelWidth"]
-    lambda_max = (299792458.0 / (freq_0 + (nchans // 2) * chan_bandwidth))
-    telescope_max_baseline = 8e4
-    angular_resolution = np.rad2deg(lambda_max /
+    lambda_min = (299792458.0 / (freq_0 + (nchans // 2) * chan_bandwidth))
+    telescope_max_baseline = 4.2e3 # TODO: need to automate calculation of this value
+    angular_resolution = np.rad2deg(lambda_min /
                                     telescope_max_baseline *
                                     1.220) * 3600 #nyquest rate in arcsecs
-    fov = 3 * 3600 # 3 degrees (ample to cover MeerKAT primary beam in L-Band)
-    im_npix = fov / angular_resolution
+    fov = 1.5 * 3600 # 1 deg is good enough to cover FWHM of beam at L-Band
+    sampling = 1/10.0 # 1 pixel is a 1/6 of the angular resolution
+    im_npix = int(fov / angular_resolution / sampling)
     bw_per_image_slice = 100.0e6
     im_numchans = int(np.ceil(o["ChannelWidth"] * nchans / bw_per_image_slice))
 
@@ -251,6 +252,7 @@ for o in observations:
         {
             'hdf5files'  : [h5file],
             'output-ms'  : msfile,
+            'model-data' : True,
             'full_pol'   : cfg.h5toms.full_pol,
         },
         input=INPUT, output=OUTPUT,
@@ -296,7 +298,7 @@ for o in observations:
 #  
 #    recipe.add("cab/casa_flagdata", "flag_userflags",
 #        userflags,
-#        input=OUTPUT, output=OUTPUT,
+#        input=INPUT, output=OUTPUT,
 #        label="flag_userflags:: Specify any additional flags from user")
 
     recipe.add("cab/casa_flagdata", "flag_bad_start_channels",
@@ -307,7 +309,7 @@ for o in observations:
             "spw"       :   cfg.flag_bandstart.spw,
             "autocorr"  :   cfg.flag_bandstart.autocorr,
         },
-        input=OUTPUT, output=OUTPUT,
+        input=INPUT, output=OUTPUT,
         label="flag_bandstart:: Flag start of band")
 
     recipe.add("cab/casa_flagdata", "flag_bad_end_channels",
@@ -318,7 +320,7 @@ for o in observations:
             "spw"       :   cfg.flag_bandend.spw,
             "autocorr"  :   cfg.flag_bandend.autocorr,
         },
-        input=OUTPUT, output=OUTPUT,
+        input=INPUT, output=OUTPUT,
         label="flag_bandend:: Flag end of band")
 
     recipe.add("cab/casa_flagdata", "flag_autocorrs",
@@ -329,7 +331,7 @@ for o in observations:
             "spw"       :   cfg.flag_autocorrs.spw,
             "autocorr"  :   cfg.flag_autocorrs.autocorr,
         },
-        input=OUTPUT, output=OUTPUT,
+        input=INPUT, output=OUTPUT,
         label="flag_autocorrs:: Flag auto correlations")
 
     # @mauch points out some MeerKAT h5 files contain flipped uvw
@@ -341,7 +343,7 @@ for o in observations:
             "outputvis" :   msfile, # into same ms please
             "reuse"     :   cfg.casa_fixvis.reuse,
         },
-        input=OUTPUT, output=OUTPUT,
+        input=INPUT, output=OUTPUT,
         label="recompute_uvw:: Recompute MeerKAT uvw coordinates")
 
     #Run SetJY with our database of southern calibrators
@@ -388,7 +390,7 @@ for o in observations:
                 "scalebychan"   :   cfg.setjy_manual.scalebychan,
                 "spw"           :   cfg.setjy_manual.spw,
             },
-            input=OUTPUT, output=OUTPUT,
+            input=INPUT, output=OUTPUT,
             label="setjy:: Initial flux density scaling")
     else:
         # If model is not in @Ben's southern calibrators, then use CASA model. 
@@ -398,7 +400,7 @@ for o in observations:
             "standard"  :   cfg.setjy_auto.standard,
             "field"     :   str(bandpass_cal)
             },
-            input=OUTPUT, output=OUTPUT,
+            input=INPUT, output=OUTPUT,
             label="setjy:: Initial flux density scaling")
 
     # @mauch points out some antenna positions may
@@ -417,7 +419,7 @@ for o in observations:
             "caltable"      : delaycal_table,
             "calmode"       : cfg.delaycal.calmode,
         },
-        input=OUTPUT, output=OUTPUT,
+        input=INPUT, output=OUTPUT,
         label="delaycal:: Delay calibration")
 
     # The bandpass calibrator may vary in phase over time
@@ -434,7 +436,7 @@ for o in observations:
             "minsnr"        :   cfg.phase0.minsnr,
             "gaintable"     :   [delaycal_table],
         },
-        input=OUTPUT, output=OUTPUT,
+        input=INPUT, output=OUTPUT,
         label="phase0:: Initial phase calibration")
 
     # Then a bandpass calibration, lets work out a solution
@@ -457,7 +459,7 @@ for o in observations:
                                  phasecal_table],
             "interp"        :   cfg.bandpass.interp,
         },
-        input=OUTPUT, output=OUTPUT,
+        input=INPUT, output=OUTPUT,
         label="bandpass:: Bandpass calibration")
 
     # Finally we do a second order correction on the gain
@@ -478,7 +480,7 @@ for o in observations:
                                 bpasscal_table],
             "interp"       :   cfg.gaincal.interp,
         },
-        input=OUTPUT, output=OUTPUT,
+        input=INPUT, output=OUTPUT,
         label="gaincal:: Gain calibration")
 
     # Scale the gaincal solutions amplitude to that of the
@@ -492,7 +494,7 @@ for o in observations:
             "transfer"      :   [str(gain_cal)],
             "incremental"   :   cfg.fluxscale.incremental,
         },
-        input=OUTPUT, output=OUTPUT,
+        input=INPUT, output=OUTPUT,
         label="fluxscale:: Setting Fluxscale")
 
     # Apply gain solutions to all fields including
@@ -507,15 +509,15 @@ for o in observations:
                                  phasecal_table,
                                  bpasscal_table,
                                  fluxcal_table],
-            "gainfield"     :   [gain_cal,
+            "gainfield"     :   map(str, [gain_cal,
                                  bandpass_cal,
                                  bandpass_cal,
-                                 gain_cal],
+                                 gain_cal]),
             "interp"        :   cfg.applycal.interp,
             "spwmap"        :   cfg.applycal.spwmap,
             "parang"        :   cfg.applycal.parang,
         },
-        input=OUTPUT, output=OUTPUT,
+        input=INPUT, output=OUTPUT,
         label="applycal:: Apply calibration solutions to target")
 
     # Lets try squash the last of the RFI with the autoflagger
@@ -544,7 +546,7 @@ for o in observations:
             "cal_field"              : str(bandpass_cal),
             "valid_phase_range"      : cfg.flag_baseline_phases.valid_phase_range,
             "max_invalid_datapoints" : cfg.flag_baseline_phases.max_invalid_datapoints,
-            "output_dir"             : os.environ["HOME"] + "/" + OUTPUT + "/", #where is this thing mapped to inside the container
+            "output_dir"             : "", 
             "nrows_chunk"            : cfg.flag_baseline_phases.nrows_chunk,
             "simulate"               : cfg.flag_baseline_phases.simulate,
         },
@@ -563,7 +565,9 @@ for o in observations:
             "ydatacolumn"       : cfg.plot_ampuvdist.ydatacolumn,
             "field"             : str(bandpass_cal),
             "correlation"       : cfg.plot_ampuvdist.correlation,
-            "iteraxis"          : cfg.plot_ampuvdist.iteraxis,
+#            "iteraxis"          :
+#            cfg.plot_ampuvdist.iteraxis, # This
+#            axis was not availble for iteration
             "avgchannel"        : cfg.plot_ampuvdist.avgchannel,
             "avgtime"           : cfg.plot_ampuvdist.avgtime,
             "coloraxis"         : cfg.plot_ampuvdist.coloraxis,
@@ -573,7 +577,7 @@ for o in observations:
                                   source_name[bandpass_cal] + "_" +
                                   "ampuvdist.png",
         },
-        input=OUTPUT, output=OUTPUT,
+        input=INPUT, output=OUTPUT,
         label="plot_ampuvdist:: Diagnostic plot of amplitude with uvdist")
 
     #Diagnostic: phase vs uv dist of the bandpass calibrator
@@ -586,7 +590,7 @@ for o in observations:
             "ydatacolumn"       : cfg.plot_phaseuvdist.ydatacolumn,
             "field"             : str(bandpass_cal),
             "correlation"       : cfg.plot_phaseuvdist.correlation,
-            "iteraxis"          : cfg.plot_phaseuvdist.iteraxis,
+#            "iteraxis"          : cfg.plot_phaseuvdist.iteraxis,
             "avgchannel"        : cfg.plot_phaseuvdist.avgchannel,
             "avgtime"           : cfg.plot_phaseuvdist.avgtime,
             "coloraxis"         : cfg.plot_phaseuvdist.coloraxis,
@@ -596,7 +600,7 @@ for o in observations:
                                   source_name[bandpass_cal] + "_" +
                                   "phaseuvdist.png",
         },
-        input=OUTPUT, output=OUTPUT,
+        input=INPUT, output=OUTPUT,
         label="plot_phaseuvdist:: Diagnostic plot of phase with uvdist")
 
     # Diagnostic: amplitude vs phase of bp calibrator per antenna
@@ -609,7 +613,7 @@ for o in observations:
             "ydatacolumn"       : cfg.plot_phaseball.ydatacolumn,
             "field"             : str(bandpass_cal),
             "correlation"       : cfg.plot_phaseball.correlation,
-            "iteraxis"          : cfg.plot_phaseball.iteraxis,
+#            "iteraxis"          : cfg.plot_phaseball.iteraxis,
             "avgchannel"        : cfg.plot_phaseball.avgchannel,
             "avgtime"           : cfg.plot_phaseball.avgtime,
             "coloraxis"         : cfg.plot_phaseball.coloraxis,
@@ -619,7 +623,7 @@ for o in observations:
                                   source_name[bandpass_cal] + "_" +
                                   "phaseball.png",
         },
-        input=OUTPUT, output=OUTPUT,
+        input=INPUT, output=OUTPUT,
         label="plot_phaseball:: Diagnostic plot of phaseball")
 
     # Diagnostic: amplitude vs frequency of bp calibrator
@@ -632,7 +636,7 @@ for o in observations:
             "ydatacolumn"       : cfg.plot_amp_freq.ydatacolumn,
             "field"             : str(bandpass_cal),
             "correlation"       : cfg.plot_amp_freq.correlation,
-            "iteraxis"          : cfg.plot_amp_freq.iteraxis,
+#            "iteraxis"          : cfg.plot_amp_freq.iteraxis,
             "avgchannel"        : cfg.plot_amp_freq.avgchannel,
             "avgtime"           : cfg.plot_amp_freq.avgtime,
             "coloraxis"         : cfg.plot_amp_freq.coloraxis,
@@ -642,7 +646,7 @@ for o in observations:
                                   source_name[bandpass_cal] + "_" +
                                   "band.png",
         },
-        input=OUTPUT, output=OUTPUT,
+        input=INPUT, output=OUTPUT,
         label="plot_amp_freq:: Diagnostic plot of band")
 
     # Diagnostic: phase vs time of bp calibrator
@@ -658,7 +662,7 @@ for o in observations:
             "ydatacolumn"       : cfg.plot_phase_time.ydatacolumn,
             "field"             : str(bandpass_cal),
             "correlation"       : cfg.plot_phase_time.correlation,
-            "iteraxis"          : cfg.plot_phase_time.iteraxis,
+#            "iteraxis"          : cfg.plot_phase_time.iteraxis,
             "avgchannel"        : cfg.plot_phase_time.avgchannel,
             "avgtime"           : cfg.plot_phase_time.avgtime,
             "coloraxis"         : cfg.plot_phase_time.coloraxis,
@@ -668,7 +672,7 @@ for o in observations:
                                   source_name[bandpass_cal] + "_" +
                                   "phasevtime.png",
         },
-        input=OUTPUT, output=OUTPUT,
+        input=INPUT, output=OUTPUT,
         label="plot_phase_time:: Diagnostic plot of phase with time")
 
     # Diagnostic: phase vs time of bp calibrator
@@ -682,7 +686,7 @@ for o in observations:
             "ydatacolumn"       : cfg.plot_phase_freq.ydatacolumn,
             "field"             : str(bandpass_cal),
             "correlation"       : cfg.plot_phase_freq.correlation,
-            "iteraxis"          : cfg.plot_phase_freq.iteraxis,
+#            "iteraxis"          : cfg.plot_phase_freq.iteraxis,
             "avgchannel"        : cfg.plot_phase_freq.avgchannel,
             "avgtime"           : cfg.plot_phase_freq.avgtime,
             "coloraxis"         : cfg.plot_phase_freq.coloraxis,
@@ -692,7 +696,7 @@ for o in observations:
                                   source_name[bandpass_cal] + "_" +
                                   "phasevfreq.png",
         },
-        input=OUTPUT, output=OUTPUT,
+        input=INPUT, output=OUTPUT,
         label="plot_phase_freq:: Diagnostic plot of phase with freq")
 
     # # this wastes disk space... who cares if the calibrators are in there or not
@@ -714,10 +718,9 @@ for o in observations:
             {
                 "msname"            : msfile,
                 "column"            : cfg.wsclean_image.column,
-                "weight"            : cfg.wsclean_image.weight,
-                "robust"            : cfg.wsclean_image.robust,
+                "weight"            : "briggs %.2f"%(cfg.wsclean_image.robust),
                 "npix"              : im_npix,
-                "cellsize"          : angular_resolution,
+                "cellsize"          : angular_resolution*sampling,
                 "clean_iterations"  : cfg.wsclean_image.clean_iterations,
                 "mgain"             : cfg.wsclean_image.mgain,
                 "channelsout"       : im_numchans,
@@ -725,79 +728,81 @@ for o in observations:
                 "field"             : str(ti),
                 "name"              : imname,
             },
-            input=OUTPUT, output=OUTPUT,
+            input=INPUT, output=OUTPUT,
             label="image_%d::wsclean" % ti)
 
-    # Diagnostic only: image bandpass
-    recipe.add("cab/wsclean", "wsclean_bandpass",
-        {
-            "msname"            : msfile,
-            "column"            : cfg.wsclean_bandpass.column,
-            "weight"            : cfg.wsclean_bandpass.weight,
-            "robust"            : cfg.wsclean_bandpass.robust,
-            "npix"              : im_npix / 5, # don't need the full FOV
-            "cellsize"          : angular_resolution,
-            "clean_iterations"  : cfg.wsclean_bandpass.clean_iterations,
-            "mgain"             : cfg.wsclean_bandpass.mgain,
-            "channelsout"       : im_numchans,
-            "joinchannels"      : cfg.wsclean_bandpass.joinchannels,
-            "field"             : str(bandpass_cal),
-            "name"              : basename + "_bp_" + source_name[bandpass_cal],
-        },
-        input=OUTPUT, output=OUTPUT,
-        label="image_bandpass::wsclean")
+# [Sphe] I don't think images of calibrators are needed. These are point sources, so images give us nothing we can't get from
+# gain/phase plots.
+#
+#   # Diagnostic only: image bandpass
+#   recipe.add("cab/wsclean", "wsclean_bandpass",
+#       {
+#           "msname"            : msfile,
+#           "column"            : cfg.wsclean_bandpass.column,
+#           "weight"            : cfg.wsclean_bandpass.weight,
+#           "robust"            : cfg.wsclean_bandpass.robust,
+#           "npix"              : im_npix / 5, # don't need the full FOV
+#           "cellsize"          : angular_resolution*2,
+#           "clean_iterations"  : cfg.wsclean_bandpass.clean_iterations,
+#           "mgain"             : cfg.wsclean_bandpass.mgain,
+#           "channelsout"       : im_numchans,
+#           "joinchannels"      : cfg.wsclean_bandpass.joinchannels,
+#           "field"             : str(bandpass_cal),
+#           "name"              : basename + "_bp_" + source_name[bandpass_cal],
+#       },
+#       input=INPUT, output=OUTPUT,
+#       label="image_bandpass::wsclean")
 
-    # Diagnostic only: image gaincal
-    recipe.add("cab/wsclean", "wsclean_gain",
-        {
-            "msname"            : msfile,
-            "column"            : cfg.wsclean_gain.column,
-            "weight"            : cfg.wsclean_gain.weight,
-            "robust"            : cfg.wsclean_gain.robust,
-            "npix"              : im_npix / 5, # don't need the full FOV
-            "cellsize"          : angular_resolution,
-            "clean_iterations"  : cfg.wsclean_gain.clean_iterations,
-            "mgain"             : cfg.wsclean_gain.mgain,
-            "channelsout"       : im_numchans,
-            "joinchannels"      : cfg.wsclean_gain.joinchannels,
-            "field"             : str(gain_cal),
-            "name"              : basename + "_gc_" + source_name[gain_cal],
-        },
-        input=OUTPUT, output=OUTPUT,
-        label="image_gain::wsclean")
+#   # Diagnostic only: image gaincal
+#   recipe.add("cab/wsclean", "wsclean_gain",
+#       {
+#           "msname"            : msfile,
+#           "column"            : cfg.wsclean_gain.column,
+#           "weight"            : cfg.wsclean_gain.weight,
+#           "robust"            : cfg.wsclean_gain.robust,
+#           "npix"              : im_npix / 5, # don't need the full FOV
+#           "cellsize"          : angular_resolution*2,
+#           "clean_iterations"  : cfg.wsclean_gain.clean_iterations,
+#           "mgain"             : cfg.wsclean_gain.mgain,
+#           "channelsout"       : im_numchans,
+#           "joinchannels"      : cfg.wsclean_gain.joinchannels,
+#           "field"             : str(gain_cal),
+#           "name"              : basename + "_gc_" + source_name[gain_cal],
+#       },
+#       input=INPUT, output=OUTPUT,
+#       label="image_gain::wsclean")
 
 
-
+    # Add Flagging and 1GC steps
+    onegcsteps = [
+                   "convert",
+                   "rfimask",
+                   "autoflag",
+                   "flag_bandstart",
+                   "flag_bandend",
+                   "flag_autocorrs",
+                   "recompute_uvw",
+                   "setjy",
+                   "delaycal",
+                   "phase0",
+                   "bandpass",
+                   "gaincal",
+                   "fluxscale",
+                   "applycal",
+                   "autoflag_corrected_vis",
+                   "flag_baseline_phases",
+                   "plot_ampuvdist",
+                   "plot_phaseuvdist",
+                   "plot_phaseball",
+                   "plot_amp_freq",
+                   "plot_phase_time",
+                   "plot_phase_freq",
+                 ]
+    onegcsteps += ["image_%d" % ti for ti in targets]
+    #onegcsteps += ["image_bandpass", "image_gain"] # diagnostic only
 
     try:
-        # Add Flagging and 1GC steps
-        onegcsteps = ["convert",
-                      "rfimask",
-                      "autoflag",
-                      "flag_bandstart",
-                      "flag_bandend",
-                      "flag_autocorrs",
-                      "recompute_uvw",
-                      "setjy",
-                      "delaycal",
-                      "phase0",
-                      "bandpass",
-                      "gaincal",
-                      "fluxscale",
-                      "applycal",
-                      "autoflag_corrected_vis",
-                      "flag_baseline_phases",
-                      "plot_ampuvdist",
-                      "plot_phaseuvdist",
-                      "plot_phaseball",
-                      "plot_amp_freq",
-                      "plot_phase_time",
-                      "plot_phase_freq",
-                     ]
-        onegcsteps += ["image_%d" % ti for ti in targets]
-        onegcsteps += ["image_bandpass", "image_gain"] # diagnostic only
- 
-        # RUN FOREST RUN!!!
+    # RUN FOREST RUN!!!
         recipe.run(onegcsteps)
 
     except stimela.PipelineException as e:
@@ -814,7 +819,7 @@ for o in observations:
             'command'    : 'prep',
             'msname'     : msfile,
         },
-        input=OUTPUT, output=OUTPUT,
+        input=INPUT, output=OUTPUT,
         label="prepms::Adds flagsets")
 
 
@@ -826,7 +831,7 @@ for o in observations:
             "fromcol"           : cfg.move_corrdata_to_data.fromcol,
             "tocol"             : cfg.move_corrdata_to_data.tocol,
         },
-        input=OUTPUT, output=OUTPUT,
+        input=INPUT, output=OUTPUT,
         label="move_corrdata_to_data::msutils")
 
     # Mark current flags as legacy
@@ -846,68 +851,68 @@ for o in observations:
         imname_mfs = imname_prefix + "-MFS-image.fits"
         model_prefix = basename + "_LSM0_" + source_name[ti]
         model_name = model_prefix + ".lsm.html"
-        recipe.add("cab/sourcery", "extract_sources_%d" % ti,
+        recipe.add("cab/pybdsm", "extract_sources_%d" % ti,
             {
-                "imagename"     : imname_mfs,
-                "prefix"        : model_prefix,
-                "pybdsm"        : cfg.source_find.pybdsm,
+                "image"         : "%s:output"%imname_mfs,
+                "outfile"       : model_prefix+".fits",
                 "thresh_pix"    : cfg.source_find.thresh_pix,
                 "thresh_isl"    : cfg.source_find.thresh_isl,
+                "port2tigger"   :   True,
             },
-            input=OUTPUT, output=OUTPUT,
+            input=INPUT, output=OUTPUT,
             label="source_find_%d:: Extract sources from previous round of cal" % ti)
 
         # Stitch wsclean channel images into a cube
         cubename = basename + "_1GC_" + source_name[ti] + "-CLEAN_cube.fits"
         recipe.add("cab/fitstool", "fitstool",
             {
-                "image-names"       : [os.path.basename(img)
-                                       for img in glob.glob("%s/%s-*-image.fits" %
-                                                            (OUTPUT,
-                                                             imname_prefix))],
-                "output"            : cubename,
-                "stack"             : "%s:3" % cubename,
+                "image"     : [ '%s-%04d-image.fits:output'%(imname_prefix, a) for a in range(im_numchans) ],
+                "output"    : cubename,
+                "stack"     : True,
+                "fits-axis" : 3,
             },
-            input=OUTPUT, output=OUTPUT,
+            input=INPUT, output=OUTPUT,
             label="stitch_cube_%d:: Stitch MFS image slices into a cube" % ti)
 
         # Add SPIs
         recipe.add("cab/specfit", "add_SPIs_LSM0",
             {
-                "image"     :   cubename,
-                "make_spi"  :   cfg.specfit.make_spi,
-                "tol"       :   cfg.specfit.tol,
-                "spi_image" :   cfg.specfit.spi_image,
-                "add_spi"   :   cfg.specfit.add_spi,
-                "skymodel"  :   model_name, # model to which SPIs must be added
-                "freq0"     :   freq_0,    # reference frequency for SPI calculation
-                "sigma"     :   cfg.specfit.sigma,
+                "image"                 :   "%s:output"%cubename,
+                "output-spi-image"      :   "%s-spi.fits"%imname_prefix,
+                "output-spi-error-image":   "%s-spi.error.fits"%imname_prefix,
+                "input-skymodel"        :   "%s:output"%model_name, # model to which SPIs must be added
+                "output-skymodel"       :   model_name,
+                "tolerance-range"       :   cfg.specfit.tol,
+                "freq0"                 :   freq_0,    # reference frequency for SPI calculation
+                "sigma-level"           :   cfg.specfit.sigma,
             },
-            input=OUTPUT, output=OUTPUT,
+            input=INPUT, output=OUTPUT,
             label="SPI_%d::Add SPIs to LSM" % ti)
 
         # Selfcal and subtract brightest sources
         recipe.add("cab/calibrator", "Initial_Gjones_subtract_LSM0",
             {
-                "skymodel"  :   model_name,
-                "reset"     :   cfg.selfcal.reset,
+                "skymodel"  :   "%s:output"%model_name,
+#                "reset"     :   cfg.selfcal.reset,
                 "label"     :   cfg.selfcal.label,
                 "msname"    :   msfile,
-                "ncpu"      :   cfg.selfcal.ncpu,
+                "threads"   :   cfg.selfcal.ncpu,
                 "column"    :   cfg.selfcal.column,
-                "output"    :   cfg.selfcal.output,
+                "output-data"    :   cfg.selfcal.output,
                 "Gjones"    :   cfg.selfcal.gjones,
-                "Gjones_intervals" : [gain_sol_int, nchans / float(1000)],
-                "DDjones_smoothing" :  cfg.selfcal.ddjones_smoothing,
+                "Gjones-solution-intervals" : map(int, [float(gain_sol_int[:-1]), nchans / float(1000)]),
+                "DDjones-smoothing-intervals" :  cfg.selfcal.ddjones_smoothing,
                 # TODO: MeerKAT beams need to go in this section
                 "Ejones"    :   cfg.selfcal.ejones,
-                "beam_files_pattern" : cfg.selfcal.beam_files_pattern,
-                "beam_l_axis" : cfg.selfcal.beam_l_axis,
-                "beam_m_axis" : cfg.selfcal.beam_m_axis,
-                "gjones_ampl_clipping"  :   cfg.selfcal.gjones_ampl_clipping,
-                "args"  :   cfg.selfcal.args,
+                "beam-files-pattern" : cfg.selfcal.beam_files_pattern,
+                "beam-l-axis" : cfg.selfcal.beam_l_axis,
+                "beam-m-axis" : cfg.selfcal.beam_m_axis,
+                "Gjones-ampl-clipping"  :   cfg.selfcal.gjones_ampl_clipping,
+                "Gjones-ampl-clipping-low"  :   cfg.selfcal.gjones_ampl_clipping_low,
+                "Gjones-ampl-clipping-high"  :   cfg.selfcal.gjones_ampl_clipping_high,
+#                "args"  :   cfg.selfcal.args,
             },
-            input=OUTPUT, output=OUTPUT,
+            input=INPUT, output=OUTPUT,
             label="SELFCAL0_%d:: Calibrate and subtract LSM0" % ti)
 
         #make another mfs image
@@ -916,10 +921,9 @@ for o in observations:
             {
                 "msname"            : msfile,
                 "column"            : cfg.wsclean_selfcal.column,
-                "weight"            : cfg.wsclean_selfcal.weight,
-                "robust"            : cfg.wsclean_selfcal.robust,
+                "weight"            : "briggs %2.f"%(cfg.wsclean_selfcal.robust),
                 "npix"              : im_npix,
-                "cellsize"          : angular_resolution,
+                "cellsize"          : angular_resolution*sampling,
                 "clean_iterations"  : cfg.wsclean_selfcal.clean_iterations,
                 "mgain"             : cfg.wsclean_selfcal.mgain,
                 "channelsout"       : im_numchans,
@@ -927,7 +931,7 @@ for o in observations:
                 "field"             : str(ti),
                 "name"              : imname_prefix,
             },
-            input=OUTPUT, output=OUTPUT,
+            input=INPUT, output=OUTPUT,
             label="image_SC0_%d::wsclean" % ti)
 
         #create a mask for this round of selfcal
@@ -955,8 +959,7 @@ for o in observations:
         {
             "msname"            : msfile,
             "column"            : cfg.wsclean_v_residue.column,
-            "weight"            : cfg.wsclean_v_residue.weight,
-            "robust"            : cfg.wsclean_v_residue.robust,
+            "weight"            : "briggs %.2f"%(cfg.wsclean_v_residue.robust),
             "npix"              : im_npix,
             "cellsize"          : angular_resolution,
             "clean_iterations"  : cfg.wsclean_v_residue.clean_iterations,
@@ -967,30 +970,30 @@ for o in observations:
             "name"              : imname_prefix,
             "pol"               : cfg.wsclean_v_residue.pol,
         },
-        input=OUTPUT, output=OUTPUT,
+        input=INPUT, output=OUTPUT,
         label="image_stokesv_residue_%d::wsclean image STOKES "
               "V as diagnostic" % ti)
 
+    # Initial selfcal loop
+    twogcsteps = ["prepms",
+                "move_corrdata_to_data",
+                "flagset_saveas_legacy",
+               ]
+
+    for ti in targets:
+        twogcsteps += ["source_find_%d" % ti,
+                       "stitch_cube_%d" % ti,
+                       "SPI_%d" % ti,
+                       "SELFCAL0_%d" % ti,
+                       "image_SC0_%d" % ti,
+                       "MSK_SC0_%d" % ti,
+                      ]
+
+    # diagnostic only:
+    twogcsteps += ["image_stokesv_residue_%d" % ti for ti in targets]
+
     try:
-        # Initial selfcal loop
-        twogcsteps = ["prepms",
-                    "move_corrdata_to_data",
-                    "flagset_saveas_legacy",
-                   ]
-
-        for ti in targets:
-            twogcsteps += ["source_find_%d" % ti,
-                           "stitch_cube_%d" % ti,
-                           "SPI_%d" % ti,
-                           "SELFCAL0_%d" % ti,
-                           "image_SC0_%d" % ti,
-                           "MSK_SC0_%d" % ti,
-                          ]
-
-        # diagnostic only:
-        twogcsteps += ["image_stokesv_residue_%d" % ti for ti in targets]
-
-        # RUN FOREST RUN!!!
+    # RUN FOREST RUN!!!
         recipe.run(twogcsteps)
 
     except stimela.PipelineException as e:
@@ -998,4 +1001,3 @@ for o in observations:
         print 'failed {}'.format(e.failed.label)
         print 'remaining {}'.format([c.label for c in e.remaining])
         raise
-
