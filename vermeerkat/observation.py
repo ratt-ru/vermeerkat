@@ -20,6 +20,7 @@
 
 import collections
 import itertools
+import json
 import os
 import sys
 
@@ -39,6 +40,27 @@ def standard_observation_query():
 
     # Construct the query
     return ' AND '.join('%s:%s' % (fq.field, fq.query) for fq in query_list)
+
+def get_observations(input_dir, cfg):
+    # If a specific HDF5 file is specified, attempt to load local metadata first
+    if cfg.general.hdf5_file is not None:
+        basename = os.path.splitext(cfg.general.hdf5_file)[0]
+        metadata_filename = ''.join([basename, '.json'])
+        metadata_path = os.path.join(input_dir, metadata_filename)
+
+        # If it exists, load and return the metadata as our observation object
+        if os.path.exists(metadata_path):
+            vermeerkat.log.info("Observation metadata exists locally at '{}'. "
+                                "Reusing it.".format(metadata_path))
+
+            return [load_observation_metadata(input_dir, metadata_filename)]
+        # Nope, need to download it from the server
+        else:
+            query = 'Filename:{}'.format(cfg.general.hdf5_file)
+            return query_recent_observations(cfg.general.solr_url, query)
+    else:
+        # Try find some recent observations to image
+        return query_recent_observations(cfg.general.solr_url, query)
 
 def query_recent_observations(solr_url, query=None):
     """
@@ -102,7 +124,7 @@ def query_recent_observations(solr_url, query=None):
     else:
         return res
 
-def download_observation(observation, directory):
+def download_observation(directory, observation):
     """ Download the specified observation """
     import requests
     import progressbar
@@ -179,3 +201,40 @@ def download_observation(observation, directory):
         #log.warn("Quitting download on Keyboard Interrupt")
 
     return filename
+
+def valid_observation_exists(directory, h5filename, observation):
+    """
+    Return True if both an h5file and the associated observation metadata
+    exist. The file size indicated in the metadata must agree with that
+    of the h5file.
+    """
+
+    # Does the h5 file exist?
+    h5file = os.path.join(directory, h5filename)
+
+    if not os.path.exists(h5file):
+        return False
+
+    # Compare metadata file size vs h5 file size
+    h5_size = os.path.getsize(h5file)
+    obs_size = observation["FileSize"][0]
+
+    if not obs_size == os.path.getsize(h5file):
+        vermeerkat.log.warn("'{}' file size '{}' "
+            "differs from that in the observation metadata '{}'."
+                .format(h5filename, h5_size, obs_size))
+        return False
+
+    return True
+
+def load_observation_metadata(directory, filename):
+    """ Load observation metadata """
+
+    with open(os.path.join(directory, filename), 'r') as f:
+        return json.load(f)
+
+def dump_observation_metadata(directory, filename, observation):
+    """ Dump observation metadata """
+
+    with open(os.path.join(directory, filename), 'w') as f:
+        return json.dump(observation, f)

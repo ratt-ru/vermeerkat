@@ -33,7 +33,11 @@ from functools import reduce
 
 from vermeerkat.config import configuration
 from vermeerkat.observation import (query_recent_observations,
-    download_observation)
+                                    download_observation,
+                                    load_observation_metadata,
+                                    dump_observation_metadata,
+                                    get_observations,
+                                    valid_observation_exists)
 
 # There isn't a Southern standard in CASA
 # so construct a little database of them for reference
@@ -73,25 +77,25 @@ args = ast.literal_eval(args)
 # Load in the configuration
 cfg = configuration(args)
 
-# If a specific HDF5 file is specified, use that to specify
-# the observation query
-if cfg.general.hdf5_file is not None:
-    query = 'Filename:{}'.format(cfg.general.hdf5_file)
-else:
-    query = None
-
-# Find recent observations
-observations = query_recent_observations(cfg.general.solr_url, query)
+# Get a list of observations
+observations = get_observations(INPUT, cfg)
 
 if len(observations) == 0:
     vermeerkat.log.warn("No observations matching query string '{}'".format(query))
 
 # Image each observation
 for o in observations:
-    f = download_observation(o, INPUT)
-    h5file = os.path.split(f)[1]
+    # Configure filenames
+    h5file = o['Filename']
     basename = os.path.splitext(h5file)[0]
     msfile = ''.join((basename, '.ms'))
+
+    # Dump the observation metadata
+    dump_observation_metadata(INPUT, ''.join([basename, '.json']), o)
+
+    # Download if no valid observation exists
+    if not valid_observation_exists(INPUT, h5file, o):
+        download_observation(INPUT, o)
 
     # Calibrator tables
     delaycal_table = "%s.K0" % (basename)
@@ -218,8 +222,8 @@ for o in observations:
 
     vermeerkat.log.info("Will use '%s' (%d) as a closest gain calibrator (total "
         "observation time: %.2f mins)" %
-        (source_name[gain_cal], 
-         gain_cal, 
+        (source_name[gain_cal],
+         gain_cal,
          gaincal_scan_times[gain_cal_candidates.index(gain_cal)] / 60.0))
     vermeerkat.log.info("Will use '%s' (%d) as a bandpass calibrator (total "
         "observation time: %.2f mins, minimum scan time: %.2f mins)" %
@@ -300,7 +304,7 @@ for o in observations:
 #        userflags["spw"] = cfg.flag_userflags.spw
 #    if cfg.flag_userflags.autocorr is not None:
 #        userflags["autocorr"] = cfg.flag_userflags.autocorr
-#  
+#
 #    recipe.add("cab/casa_flagdata", "flag_userflags",
 #        userflags,
 #        input=OUTPUT, output=OUTPUT,
@@ -791,7 +795,7 @@ for o in observations:
                      ]
         onegcsteps += ["image_%d" % ti for ti in targets]
         onegcsteps += ["image_bandpass", "image_gain"] # diagnostic only
- 
+
         # RUN FOREST RUN!!!
         recipe.run(onegcsteps)
 
@@ -800,7 +804,7 @@ for o in observations:
         print 'failed {}'.format(e.failed.label)
         print 'remaining {}'.format([c.label for c in e.remaining])
         raise
- 
+
     recipe = stimela.Recipe("2GC Pipeline", ms_dir=MSDIR)
     # Copy CORRECTED_DATA to DATA, so we can start selfcal
     recipe.add("cab/msutils", "shift_columns",
