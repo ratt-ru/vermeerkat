@@ -7,21 +7,21 @@ RATT/RARG MeerKAT continuum self-calibration pipeline.
 ### Download and image observations in the last 3 days
 
 ```bash
-python -m vermeerat
+vermeerkat
 ```
 
 
 ### Specify a different configuration file
 
 ```bash
-python -m vermeerat -c myconfig.conf
+vermeerkat -c myconfig.conf
 ```
 
 ### Download and image a specific observation file, using a custom configuration file
 
 
 ```bash
-python -m vermeerkat -f 123456789.h5 -c myconfig.conf
+vermeerkat -f 123456789.h5 -c myconfig.conf
 ```
 
 ### The Astronomer, by Vermeer
