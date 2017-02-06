@@ -56,12 +56,6 @@ for key in calibrator_db:
                        "a:%.4f\tb:%.4f\tc:%.4f\td:%.4f" %
         (name, epoch, ra, decl, ag, bg, cg, dg))
 
-# Register directories
-
-INPUT = "input"
-OUTPUT = "output"
-PREFIX = "vermeerkat-pipeline"
-MSDIR  = "msdir"
 
 # So that we can access GLOBALS pass through to the run command
 stimela.register_globals()
@@ -72,6 +66,12 @@ args = ast.literal_eval(args)
 
 # Load in the configuration
 cfg = configuration(args)
+# Register directories
+
+INPUT = cfg.general.input
+OUTPUT = cfg.general.output
+PREFIX = cfg.general.prefix 
+MSDIR  = cfg.general.msdir
 
 # If a specific HDF5 file is specified, use that to specify
 # the observation query
@@ -112,8 +112,10 @@ for o in observations:
     angular_resolution = np.rad2deg(lambda_min /
                                     telescope_max_baseline *
                                     1.220) * 3600 #nyquest rate in arcsecs
-    fov = 1.5 * 3600 # 1 deg is good enough to cover FWHM of beam at L-Band
-    sampling = 1/10.0 # 1 pixel is a 1/6 of the angular resolution
+    fov = cfg.general.fov * 3600 # 1 deg is good enough to cover FWHM of beam at L-Band
+    sampling = cfg.general.sampling
+    if sampling>1:
+        raise RuntimeError('PSF sampling is > 1. Please check your config file.')
     im_npix = int(fov / angular_resolution / sampling)
     bw_per_image_slice = 100.0e6
     im_numchans = int(np.ceil(o["ChannelWidth"] * nchans / bw_per_image_slice))
@@ -153,6 +155,11 @@ for o in observations:
             vermeerkat.log.warn("Not using observed source %s" % name)
             continue
         source_name += [name]
+    
+
+    source_names_for_plots = {}
+    for src in source_name:
+        source_names_for_plots[src] = src.replace(' ' ,'_')
 
     if len(targets) < 1:
         raise RuntimeError("Observation %s does not have any "
@@ -564,18 +571,16 @@ for o in observations:
             "xdatacolumn"       : cfg.plot_ampuvdist.xdatacolumn,
             "ydatacolumn"       : cfg.plot_ampuvdist.ydatacolumn,
             "field"             : str(bandpass_cal),
-            "correlation"       : cfg.plot_ampuvdist.correlation,
-#            "iteraxis"          :
-#            cfg.plot_ampuvdist.iteraxis, # This
-#            axis was not availble for iteration
+            "iteraxis"          : cfg.plot_ampuvdist.iteraxis,
             "avgchannel"        : cfg.plot_ampuvdist.avgchannel,
             "avgtime"           : cfg.plot_ampuvdist.avgtime,
             "coloraxis"         : cfg.plot_ampuvdist.coloraxis,
             "expformat"         : cfg.plot_ampuvdist.expformat,
             "exprange"          : cfg.plot_ampuvdist.exprange,
             "plotfile"          : basename + "_" +
-                                  source_name[bandpass_cal] + "_" +
+                                  source_names_for_plots[source_name[bandpass_cal]] + "_" +
                                   "ampuvdist.png",
+            "overwrite"         :   True,
         },
         input=INPUT, output=OUTPUT,
         label="plot_ampuvdist:: Diagnostic plot of amplitude with uvdist")
@@ -589,16 +594,16 @@ for o in observations:
             "xdatacolumn"       : cfg.plot_phaseuvdist.xdatacolumn,
             "ydatacolumn"       : cfg.plot_phaseuvdist.ydatacolumn,
             "field"             : str(bandpass_cal),
-            "correlation"       : cfg.plot_phaseuvdist.correlation,
-#            "iteraxis"          : cfg.plot_phaseuvdist.iteraxis,
+            "iteraxis"          : cfg.plot_phaseuvdist.iteraxis,
             "avgchannel"        : cfg.plot_phaseuvdist.avgchannel,
             "avgtime"           : cfg.plot_phaseuvdist.avgtime,
             "coloraxis"         : cfg.plot_phaseuvdist.coloraxis,
             "expformat"         : cfg.plot_phaseuvdist.expformat,
             "exprange"          : cfg.plot_phaseuvdist.exprange,
             "plotfile"          : basename + "_" +
-                                  source_name[bandpass_cal] + "_" +
+                                  source_names_for_plots[source_name[bandpass_cal]] + "_" +
                                   "phaseuvdist.png",
+            "overwrite"         :   True,
         },
         input=INPUT, output=OUTPUT,
         label="plot_phaseuvdist:: Diagnostic plot of phase with uvdist")
@@ -612,16 +617,16 @@ for o in observations:
             "xdatacolumn"       : cfg.plot_phaseball.xdatacolumn,
             "ydatacolumn"       : cfg.plot_phaseball.ydatacolumn,
             "field"             : str(bandpass_cal),
-            "correlation"       : cfg.plot_phaseball.correlation,
-#            "iteraxis"          : cfg.plot_phaseball.iteraxis,
+            "iteraxis"          : cfg.plot_phaseball.iteraxis,
             "avgchannel"        : cfg.plot_phaseball.avgchannel,
             "avgtime"           : cfg.plot_phaseball.avgtime,
             "coloraxis"         : cfg.plot_phaseball.coloraxis,
             "expformat"         : cfg.plot_phaseball.expformat,
             "exprange"          : cfg.plot_phaseball.exprange,
             "plotfile"          : basename + "_" +
-                                  source_name[bandpass_cal] + "_" +
+                                  source_names_for_plots[source_name[bandpass_cal]] + "_" +
                                   "phaseball.png",
+            "overwrite"         :   True,
         },
         input=INPUT, output=OUTPUT,
         label="plot_phaseball:: Diagnostic plot of phaseball")
@@ -635,16 +640,16 @@ for o in observations:
             "xdatacolumn"       : cfg.plot_amp_freq.xdatacolumn,
             "ydatacolumn"       : cfg.plot_amp_freq.ydatacolumn,
             "field"             : str(bandpass_cal),
-            "correlation"       : cfg.plot_amp_freq.correlation,
-#            "iteraxis"          : cfg.plot_amp_freq.iteraxis,
+            "iteraxis"          : cfg.plot_amp_freq.iteraxis,
             "avgchannel"        : cfg.plot_amp_freq.avgchannel,
             "avgtime"           : cfg.plot_amp_freq.avgtime,
             "coloraxis"         : cfg.plot_amp_freq.coloraxis,
             "expformat"         : cfg.plot_amp_freq.expformat,
             "exprange"          : cfg.plot_amp_freq.exprange,
             "plotfile"          : basename + "_" +
-                                  source_name[bandpass_cal] + "_" +
+                                  source_names_for_plots[source_name[bandpass_cal]] + "_" +
                                   "band.png",
+            "overwrite"         :   True,
         },
         input=INPUT, output=OUTPUT,
         label="plot_amp_freq:: Diagnostic plot of band")
@@ -661,16 +666,16 @@ for o in observations:
             "xdatacolumn"       : cfg.plot_phase_time.xdatacolumn,
             "ydatacolumn"       : cfg.plot_phase_time.ydatacolumn,
             "field"             : str(bandpass_cal),
-            "correlation"       : cfg.plot_phase_time.correlation,
-#            "iteraxis"          : cfg.plot_phase_time.iteraxis,
+            "iteraxis"          : cfg.plot_phase_time.iteraxis,
             "avgchannel"        : cfg.plot_phase_time.avgchannel,
             "avgtime"           : cfg.plot_phase_time.avgtime,
             "coloraxis"         : cfg.plot_phase_time.coloraxis,
             "expformat"         : cfg.plot_phase_time.expformat,
             "exprange"          : cfg.plot_phase_time.exprange,
             "plotfile"          : basename + "_" +
-                                  source_name[bandpass_cal] + "_" +
+                                  source_names_for_plots[source_name[bandpass_cal]] + "_" +
                                   "phasevtime.png",
+            "overwrite"         :   True,
         },
         input=INPUT, output=OUTPUT,
         label="plot_phase_time:: Diagnostic plot of phase with time")
@@ -685,16 +690,16 @@ for o in observations:
             "xdatacolumn"       : cfg.plot_phase_freq.xdatacolumn,
             "ydatacolumn"       : cfg.plot_phase_freq.ydatacolumn,
             "field"             : str(bandpass_cal),
-            "correlation"       : cfg.plot_phase_freq.correlation,
-#            "iteraxis"          : cfg.plot_phase_freq.iteraxis,
+            "iteraxis"          : cfg.plot_phase_freq.iteraxis,
             "avgchannel"        : cfg.plot_phase_freq.avgchannel,
             "avgtime"           : cfg.plot_phase_freq.avgtime,
             "coloraxis"         : cfg.plot_phase_freq.coloraxis,
             "expformat"         : cfg.plot_phase_freq.expformat,
             "exprange"          : cfg.plot_phase_freq.exprange,
             "plotfile"          : basename + "_" +
-                                  source_name[bandpass_cal] + "_" +
+                                  source_names_for_plots[source_name[bandpass_cal]] + "_" +
                                   "phasevfreq.png",
+            "overwrite"         :   True,
         },
         input=INPUT, output=OUTPUT,
         label="plot_phase_freq:: Diagnostic plot of phase with freq")
@@ -731,46 +736,44 @@ for o in observations:
             input=INPUT, output=OUTPUT,
             label="image_%d::wsclean" % ti)
 
-# [Sphe] I don't think images of calibrators are needed. These are point sources, so images give us nothing we can't get from
-# gain/phase plots.
-#
-#   # Diagnostic only: image bandpass
-#   recipe.add("cab/wsclean", "wsclean_bandpass",
-#       {
-#           "msname"            : msfile,
-#           "column"            : cfg.wsclean_bandpass.column,
-#           "weight"            : cfg.wsclean_bandpass.weight,
-#           "robust"            : cfg.wsclean_bandpass.robust,
-#           "npix"              : im_npix / 5, # don't need the full FOV
-#           "cellsize"          : angular_resolution*2,
-#           "clean_iterations"  : cfg.wsclean_bandpass.clean_iterations,
-#           "mgain"             : cfg.wsclean_bandpass.mgain,
-#           "channelsout"       : im_numchans,
-#           "joinchannels"      : cfg.wsclean_bandpass.joinchannels,
-#           "field"             : str(bandpass_cal),
-#           "name"              : basename + "_bp_" + source_name[bandpass_cal],
-#       },
-#       input=INPUT, output=OUTPUT,
-#       label="image_bandpass::wsclean")
+  # [Sphe] I don't think images of calibrators are needed. These are point sources, so images give us nothing we can't get from
+  # gain/phase plots.
+ 
+    # Diagnostic only: image bandpass
+    recipe.add("cab/wsclean", "wsclean_bandpass",
+        {
+            "msname"            : msfile,
+            "column"            : cfg.wsclean_bandpass.column,
+            "weight"            : "briggs %.2f"%(cfg.wsclean_bandpass.robust),
+            "npix"              : im_npix / 2, # don't need the full FOV
+            "cellsize"          : angular_resolution * sampling,
+            "clean_iterations"  : cfg.wsclean_bandpass.clean_iterations,
+            "mgain"             : cfg.wsclean_bandpass.mgain,
+            "channelsout"       : im_numchans,
+            "joinchannels"      : cfg.wsclean_bandpass.joinchannels,
+            "field"             : str(bandpass_cal),
+            "name"              : basename + "_bp_" + source_names_for_plots[source_name[bandpass_cal]],
+        },
+        input=INPUT, output=OUTPUT,
+        label="image_bandpass::wsclean")
 
-#   # Diagnostic only: image gaincal
-#   recipe.add("cab/wsclean", "wsclean_gain",
-#       {
-#           "msname"            : msfile,
-#           "column"            : cfg.wsclean_gain.column,
-#           "weight"            : cfg.wsclean_gain.weight,
-#           "robust"            : cfg.wsclean_gain.robust,
-#           "npix"              : im_npix / 5, # don't need the full FOV
-#           "cellsize"          : angular_resolution*2,
-#           "clean_iterations"  : cfg.wsclean_gain.clean_iterations,
-#           "mgain"             : cfg.wsclean_gain.mgain,
-#           "channelsout"       : im_numchans,
-#           "joinchannels"      : cfg.wsclean_gain.joinchannels,
-#           "field"             : str(gain_cal),
-#           "name"              : basename + "_gc_" + source_name[gain_cal],
-#       },
-#       input=INPUT, output=OUTPUT,
-#       label="image_gain::wsclean")
+    # Diagnostic only: image gaincal
+    recipe.add("cab/wsclean", "wsclean_gain",
+        {
+            "msname"            : msfile,
+            "column"            : cfg.wsclean_gain.column,
+            "weight"            : "briggs %.2f"%(cfg.wsclean_gain.robust),
+            "npix"              : im_npix / 2, # don't need the full FOV
+            "cellsize"          : angular_resolution*sampling,
+            "clean_iterations"  : cfg.wsclean_gain.clean_iterations,
+            "mgain"             : cfg.wsclean_gain.mgain,
+            "channelsout"       : im_numchans,
+            "joinchannels"      : cfg.wsclean_gain.joinchannels,
+            "field"             : str(gain_cal),
+            "name"              : basename + "_gc_" + source_names_for_plots[source_name[gain_cal]],
+        },
+        input=INPUT, output=OUTPUT,
+        label="image_gain::wsclean")
 
 
     # Add Flagging and 1GC steps
@@ -782,6 +785,7 @@ for o in observations:
                    "flag_bandend",
                    "flag_autocorrs",
                    "recompute_uvw",
+                   "flag_baseline_phases",
                    "setjy",
                    "delaycal",
                    "phase0",
@@ -790,7 +794,6 @@ for o in observations:
                    "fluxscale",
                    "applycal",
                    "autoflag_corrected_vis",
-                   "flag_baseline_phases",
                    "plot_ampuvdist",
                    "plot_phaseuvdist",
                    "plot_phaseball",
@@ -799,18 +802,15 @@ for o in observations:
                    "plot_phase_freq",
                  ]
     onegcsteps += ["image_%d" % ti for ti in targets]
-    #onegcsteps += ["image_bandpass", "image_gain"] # diagnostic only
+    onegcsteps += ["image_bandpass", "image_gain"] # diagnostic only
 
-    try:
-    # RUN FOREST RUN!!!
-        recipe.run(onegcsteps)
+    # RUN FOREST RUN!!! 
+    # @simon The pipeline exceptions are now being handled in the recipe.run() function
+    recipe.run(onegcsteps)
 
-    except stimela.PipelineException as e:
-        print 'completed {}'.format([c.label for c in e.completed])
-        print 'failed {}'.format(e.failed.label)
-        print 'remaining {}'.format([c.label for c in e.remaining])
-        raise
- 
+
+
+    ### Let the 2GC begin
     recipe = stimela.Recipe("2GC Pipeline", ms_dir=MSDIR)
 
     # Add bitflag column. To keep track of flagsets
@@ -834,22 +834,12 @@ for o in observations:
         input=INPUT, output=OUTPUT,
         label="move_corrdata_to_data::msutils")
 
-    # Mark current flags as legacy
-    recipe.add("cab/flagms", "clear_flags",
-        {
-            "msname"        :  msfile,
-            "flagged-any"   :  cfg.flagset_saveas_legacy.flagged_any,
-            "flag"          :  cfg.flagset_saveas_legacy.flag,
-        },
-        input=INPUT,   output=OUTPUT,
-        label="flagset_saveas_legacy:: Update legacy flags")
-
     # Initial selfcal loop
     for ti in targets:
         # Extract sources in mfs clean image to build initial sky model
-        imname_prefix = basename + "_1GC_" + source_name[ti]
+        imname_prefix = basename + "_1GC_" + source_names_for_plots[source_name[ti]]
         imname_mfs = imname_prefix + "-MFS-image.fits"
-        model_prefix = basename + "_LSM0_" + source_name[ti]
+        model_prefix = basename + "_LSM0_" + source_names_for_plots[source_name[ti]]
         model_name = model_prefix + ".lsm.html"
         recipe.add("cab/pybdsm", "extract_sources_%d" % ti,
             {
@@ -863,7 +853,7 @@ for o in observations:
             label="source_find_%d:: Extract sources from previous round of cal" % ti)
 
         # Stitch wsclean channel images into a cube
-        cubename = basename + "_1GC_" + source_name[ti] + "-CLEAN_cube.fits"
+        cubename = basename + "_1GC_" + source_names_for_plots[source_name[ti]] + "-CLEAN_cube.fits"
         recipe.add("cab/fitstool", "fitstool",
             {
                 "image"     : [ '%s-%04d-image.fits:output'%(imname_prefix, a) for a in range(im_numchans) ],
@@ -893,7 +883,6 @@ for o in observations:
         recipe.add("cab/calibrator", "Initial_Gjones_subtract_LSM0",
             {
                 "skymodel"  :   "%s:output"%model_name,
-#                "reset"     :   cfg.selfcal.reset,
                 "label"     :   cfg.selfcal.label,
                 "msname"    :   msfile,
                 "threads"   :   cfg.selfcal.ncpu,
@@ -910,13 +899,12 @@ for o in observations:
                 "Gjones-ampl-clipping"  :   cfg.selfcal.gjones_ampl_clipping,
                 "Gjones-ampl-clipping-low"  :   cfg.selfcal.gjones_ampl_clipping_low,
                 "Gjones-ampl-clipping-high"  :   cfg.selfcal.gjones_ampl_clipping_high,
-#                "args"  :   cfg.selfcal.args,
             },
             input=INPUT, output=OUTPUT,
             label="SELFCAL0_%d:: Calibrate and subtract LSM0" % ti)
 
         #make another mfs image
-        imname_prefix = basename + "_SC0_" + source_name[ti]
+        imname_prefix = basename + "_SC0_" + source_names_for_plots[source_name[ti]]
         recipe.add("cab/wsclean", "wsclean_SC0_%d" % ti,
             {
                 "msname"            : msfile,
@@ -939,18 +927,18 @@ for o in observations:
         maskname = imname_prefix + "_MASK"
         recipe.add("cab/cleanmask", "make_clean_mask",
             {
-                "image"     :   imname_mfs,
-                "outname"   :   maskname,
+                "image"     :   '%s:output'%imname_mfs,
+                "output"    :   maskname,
                 "sigma"     :   cfg.cleanmask.sigma,
                 "iters"     :   cfg.cleanmask.iters,
-                "kernel"    :   cfg.cleanmask.kernel,
+                "boxes"    :   cfg.cleanmask.kernel,
             },
             input=INPUT, output=OUTPUT,
             label="MSK_SC0_%d::Make clean mask" % ti)
 
     for ti in targets:
         # Extract sources in mfs clean image to build initial sky model
-        imname_prefix = basename + "_STOKES_V_RESIDUE_" + source_name[ti]
+        imname_prefix = basename + "_STOKES_V_RESIDUE_" + source_names_for_plots[source_name[ti]]
 
         # it  is common belief that the Unverse is free of
         # stokes V for the most part. So any structure left
@@ -961,7 +949,7 @@ for o in observations:
             "column"            : cfg.wsclean_v_residue.column,
             "weight"            : "briggs %.2f"%(cfg.wsclean_v_residue.robust),
             "npix"              : im_npix,
-            "cellsize"          : angular_resolution,
+            "cellsize"          : angular_resolution*sampling,
             "clean_iterations"  : cfg.wsclean_v_residue.clean_iterations,
             "mgain"             : cfg.wsclean_v_residue.mgain,
             "channelsout"       : im_numchans,
@@ -977,7 +965,6 @@ for o in observations:
     # Initial selfcal loop
     twogcsteps = ["prepms",
                 "move_corrdata_to_data",
-                "flagset_saveas_legacy",
                ]
 
     for ti in targets:
@@ -992,12 +979,5 @@ for o in observations:
     # diagnostic only:
     twogcsteps += ["image_stokesv_residue_%d" % ti for ti in targets]
 
-    try:
-    # RUN FOREST RUN!!!
-        recipe.run(twogcsteps)
+    recipe.run(twogcsteps)
 
-    except stimela.PipelineException as e:
-        print 'completed {}'.format([c.label for c in e.completed])
-        print 'failed {}'.format(e.failed.label)
-        print 'remaining {}'.format([c.label for c in e.remaining])
-        raise
