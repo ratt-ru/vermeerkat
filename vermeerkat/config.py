@@ -83,7 +83,7 @@ def configuration(args=None):
     vermeerkat.log.info("Loading defaults from {}".format(args.config))
 
     with open(args.config, 'r') as f:
-        file_config = ruamel.yaml.load(f, ruamel.yaml.RoundTripLoader)
+        file_config = ruamel.yaml.load(f, ruamel.yaml.SafeLoader)
 
     def _section_args(sections, args):
         """ Yields argparse.Namespace() containing arguments for each section """
