@@ -85,4 +85,5 @@ setup(name=PACKAGE_NAME,
     ],
     package_data={ PACKAGE_NAME: 'conf/*.conf' },
     include_package_data=True,
+    scripts=[os.path.join(PACKAGE_NAME, 'bin', 'vermeerkat')],
     zip_safe=False)
