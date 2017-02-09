@@ -66,23 +66,23 @@ def categorise_fields(scans):
     """
     Categorise fields into targets, gain calibrators and bandpass calibrators
     """
-    bandpass_cal_candidates = []
-    gain_cal_candidates = []
+    bandpasses = []
+    gaincals = []
     targets = []
-    source_index = {}
+    field_index = {}
 
     for scan in scans:
         categorise_field = False
 
-        if scan.name in source_index:
+        if scan.name in field_index:
             continue
 
         if "bpcal" in scan.tags:
-            bandpass_cal_candidates.append(scan)
+            bandpasses.append(scan)
             categorise_field = True
 
         if "gaincal" in scan.tags:
-            gain_cal_candidates.append(scan)
+            gaincals.append(scan)
             categorise_field = True
 
         if "target" in scan.tags:
@@ -90,12 +90,12 @@ def categorise_fields(scans):
             categorise_field = True
 
         if not categorise_field:
-            vermeerkat.log.warn("Not using observed field %s" % name)
+            vermeerkat.log.warn("Not using observed field %s" % scan.name)
             continue
 
-        source_index[scan.name] = len(source_index)
+        field_index[scan.name] = len(field_index)
 
-    return source_index, bandpass_cal_candidates, gain_cal_candidates, targets
+    return field_index, bandpasses, gaincals, targets
 
 def create_field_scan_map(scans):
     """ Map from scan field to list of scans containing field """
