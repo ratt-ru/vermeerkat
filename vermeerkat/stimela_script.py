@@ -31,14 +31,8 @@ from vermeerkat.caltable_parser import convert_pb_to_casaspi
 from functools import reduce
 
 from vermeerkat.config import configuration
-from vermeerkat.observation import (query_recent_observations,
-                                    download_observation,
-                                    load_observation_metadata,
-                                    dump_observation_metadata,
-                                    observation_metadatas,
-                                    valid_observation_exists)
-
-from vermeerkat.utils import *
+import vermeerkat.observation as vmo
+import vermeerkat.utils as vmu
 
 # There isn't a Southern standard in CASA
 # so construct a little database of them for reference
@@ -79,7 +73,7 @@ PREFIX = cfg.general.prefix
 MSDIR  = cfg.general.msdir
 
 # Get a list of observations
-obs_metadatas = observation_metadatas(INPUT, cfg)
+obs_metadatas = vmo.observation_metadatas(INPUT, cfg)
 
 if len(obs_metadatas) == 0:
     vermeerkat.log.warn("No observations found for given parameters")
@@ -87,24 +81,24 @@ if len(obs_metadatas) == 0:
 # Image each observation
 for obs_metadata in obs_metadatas:
     # Merge observation metadata into our config
-    merge_observation_metadata(cfg, obs_metadata)
+    vmu.merge_observation_metadata(cfg, obs_metadata)
 
     # Dump the observation metadata
-    dump_observation_metadata(INPUT, ''.join([cfg.obs.basename, '.json']),
+    vmo.dump_observation_metadata(INPUT, ''.join([cfg.obs.basename, '.json']),
         obs_metadata)
 
     # Download if no valid observation exists
-    if not valid_observation_exists(INPUT, cfg.obs.h5file, obs_metadata):
-        download_observation(INPUT, obs_metadata)
+    if not vmo.valid_observation_exists(INPUT, cfg.obs.h5file, obs_metadata):
+        vmo.download_observation(INPUT, obs_metadata)
 
     # Load in scans
-    scans = load_scans(os.path.join(INPUT, cfg.obs.h5file))
+    scans = vmu.load_scans(os.path.join(INPUT, cfg.obs.h5file))
 
     # Map scan target name to a list of scans associated with it
-    field_scan_map = create_field_scan_map(scans)
+    field_scan_map = vmu.create_field_scan_map(scans)
 
     # Categories the fields observed in each scan
-    field_index, bpcals, gaincals, targets = categorise_fields(scans)
+    field_index, bpcals, gaincals, targets = vmu.categorise_fields(scans)
 
     # Use nicer names for source plots
     plot_name = { s: s.replace(' ', '_') for s
@@ -121,17 +115,17 @@ for obs_metadata in obs_metadatas:
                            "bandpass calibrators" % obs_metadata["ProductName"])
 
     # Select a gain calibrator
-    gaincal_index, gain_cal = select_gain_calibrator(targets, gaincals)
+    gaincal_index, gain_cal = vmu.select_gain_calibrator(targets, gaincals)
     # Compute the observation time spent on gain calibrators
-    gaincal_scan_times = total_scan_times(field_scan_map, gaincals)
+    gaincal_scan_times = vmu.total_scan_times(field_scan_map, gaincals)
 
     # Remove gain calibrator from the bandpass calibrators
     bpcals = [x for x in bpcals if not x.name == gain_cal.name]
 
     # Compute observation time on bandpass calibrators
-    bandpass_scan_times = total_scan_times(field_scan_map, bpcals)
+    bandpass_scan_times = vmu.total_scan_times(field_scan_map, bpcals)
     # Select the bandpass calibrator
-    bpcal_index, bandpass_cal = select_bandpass_calibrator(bpcals,
+    bpcal_index, bandpass_cal = vmu.select_bandpass_calibrator(bpcals,
                                                 bandpass_scan_times)
 
     # Choose the solution interval for the bandpass calibrator
@@ -139,7 +133,7 @@ for obs_metadata in obs_metadatas:
     bpcal_sol_int = min(s.length for s in field_scan_map[bandpass_cal.name])
 
     # Compute observation time on target
-    target_scan_times = total_scan_times(field_scan_map, targets)
+    target_scan_times = vmu.total_scan_times(field_scan_map, targets)
 
     # Get field ids for bandpass, gaincal and target
     bpcal_field = field_index[bandpass_cal.name]
