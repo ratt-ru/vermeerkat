@@ -68,6 +68,7 @@ def categorise_fields(scans):
     """
     bandpasses = []
     gaincals = []
+    delaycals = []
     targets = []
     field_index = {}
 
@@ -76,6 +77,10 @@ def categorise_fields(scans):
 
         if scan.name in field_index:
             continue
+
+        if "delaycal" in scan.tags:
+            delaycals.append(scan)
+            categorise_field = True
 
         if "bpcal" in scan.tags:
             bandpasses.append(scan)
@@ -95,7 +100,7 @@ def categorise_fields(scans):
 
         field_index[scan.name] = len(field_index)
 
-    return field_index, bandpasses, gaincals, targets
+    return field_index, bandpasses, gaincals, delaycals, targets
 
 def create_field_scan_map(scans):
     """ Map from scan field to list of scans containing field """

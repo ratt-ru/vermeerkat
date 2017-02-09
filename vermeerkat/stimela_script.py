@@ -78,8 +78,9 @@ for obs_metadata in obs_metadatas:
     # Map scan target name to a list of scans associated with it
     field_scan_map = vmu.create_field_scan_map(scans)
 
-    # Categories the fields observed in each scan
-    field_index, bpcals, gaincals, targets = vmu.categorise_fields(scans)
+    # Categorise the fields observed in each scan
+    field_index, bpcals, gaincals, delaycals, targets = (
+        vmu.categorise_fields(scans))
 
     # Alias a long name
     default_bpcal = cfg.general.bandpass_calibrator
