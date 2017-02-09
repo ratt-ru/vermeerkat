@@ -21,47 +21,28 @@
 import ast
 import os
 import sys
-import numpy as np
 import re
-import stimela
-import vermeerkat
 import glob
-from vermeerkat.caltable_parser import read_caltable
-from vermeerkat.caltable_parser import convert_pb_to_casaspi
 from functools import reduce
 
-from vermeerkat.config import configuration
-from vermeerkat.observation import (query_recent_observations,
-                                    download_observation,
-                                    load_observation_metadata,
-                                    dump_observation_metadata,
-                                    observation_metadatas,
-                                    valid_observation_exists)
+import numpy as np
 
-from vermeerkat.utils import *
+import stimela
+import vermeerkat
+import vermeerkat.caltable_parser as vmcp
+import vermeerkat.config as vmc
+import vermeerkat.observation as vmo
+import vermeerkat.utils as vmu
 
 # There isn't a Southern standard in CASA
 # so construct a little database of them for reference
 vermeerkat.log.info("Parsing calibrator table")
-ref_table = os.path.dirname(
-    os.path.abspath(vermeerkat.__file__)) + "/southern_calibrators.txt"
-calibrator_db = read_caltable(ref_table)
+
+ref_table = os.path.join(vermeerkat.install_path(), "southern_calibrators.txt")
+calibrator_db = vmcp.read_caltable(ref_table)
 
 vermeerkat.log.info("Found the following reference calibrators (in GHz format):")
-for key in calibrator_db:
-    name = key
-    epoch = calibrator_db[name]["epoch"]
-    ra = calibrator_db[name]["ra"]
-    decl = calibrator_db[name]["decl"]
-    ag = calibrator_db[name]["a_ghz"]
-    bg = calibrator_db[name]["b_ghz"]
-    cg = calibrator_db[name]["c_ghz"]
-    dg = calibrator_db[name]["d_ghz"]
-    vermeerkat.log.info("\t%s\tEpoch:%d\tRA:%3.2f\tDEC:%3.2f\t"
-                       "a:%.4f\tb:%.4f\tc:%.4f\td:%.4f" %
-        (name, epoch, ra, decl, ag, bg, cg, dg))
-
-
+vermeerkat.log.info(vmcp.format_calibrator_db(calibrator_db))
 # So that we can access GLOBALS pass through to the run command
 stimela.register_globals()
 
@@ -70,7 +51,7 @@ stimela.register_globals()
 args = ast.literal_eval(args)
 
 # Load in the configuration
-cfg = configuration(args)
+cfg = vmc.configuration(args)
 # Register directories
 
 INPUT = cfg.general.input
@@ -79,7 +60,7 @@ PREFIX = cfg.general.prefix
 MSDIR  = cfg.general.msdir
 
 # Get a list of observations
-obs_metadatas = observation_metadatas(INPUT, cfg)
+obs_metadatas = vmo.observation_metadatas(INPUT, cfg)
 
 if len(obs_metadatas) == 0:
     vermeerkat.log.warn("No observations found for given parameters")
@@ -87,24 +68,24 @@ if len(obs_metadatas) == 0:
 # Image each observation
 for obs_metadata in obs_metadatas:
     # Merge observation metadata into our config
-    merge_observation_metadata(cfg, obs_metadata)
+    vmu.merge_observation_metadata(cfg, obs_metadata)
 
     # Dump the observation metadata
-    dump_observation_metadata(INPUT, ''.join([cfg.obs.basename, '.json']),
+    vmo.dump_observation_metadata(INPUT, ''.join([cfg.obs.basename, '.json']),
         obs_metadata)
 
     # Download if no valid observation exists
-    if not valid_observation_exists(INPUT, cfg.obs.h5file, obs_metadata):
-        download_observation(INPUT, obs_metadata)
+    if not vmo.valid_observation_exists(INPUT, cfg.obs.h5file, obs_metadata):
+        vmo.download_observation(INPUT, obs_metadata)
 
     # Load in scans
-    scans = load_scans(os.path.join(INPUT, cfg.obs.h5file))
+    scans = vmu.load_scans(os.path.join(INPUT, cfg.obs.h5file))
 
     # Map scan target name to a list of scans associated with it
-    field_scan_map = create_field_scan_map(scans)
+    field_scan_map = vmu.create_field_scan_map(scans)
 
     # Categories the fields observed in each scan
-    field_index, bpcals, gaincals, targets = categorise_fields(scans)
+    field_index, bpcals, gaincals, targets = vmu.categorise_fields(scans)
 
     # Use nicer names for source plots
     plot_name = { s: s.replace(' ', '_') for s
@@ -121,17 +102,17 @@ for obs_metadata in obs_metadatas:
                            "bandpass calibrators" % obs_metadata["ProductName"])
 
     # Select a gain calibrator
-    gaincal_index, gain_cal = select_gain_calibrator(targets, gaincals)
+    gaincal_index, gain_cal = vmu.select_gain_calibrator(targets, gaincals)
     # Compute the observation time spent on gain calibrators
-    gaincal_scan_times = total_scan_times(field_scan_map, gaincals)
+    gaincal_scan_times = vmu.total_scan_times(field_scan_map, gaincals)
 
     # Remove gain calibrator from the bandpass calibrators
     bpcals = [x for x in bpcals if not x.name == gain_cal.name]
 
     # Compute observation time on bandpass calibrators
-    bandpass_scan_times = total_scan_times(field_scan_map, bpcals)
+    bandpass_scan_times = vmu.total_scan_times(field_scan_map, bpcals)
     # Select the bandpass calibrator
-    bpcal_index, bandpass_cal = select_bandpass_calibrator(bpcals,
+    bpcal_index, bandpass_cal = vmu.select_bandpass_calibrator(bpcals,
                                                 bandpass_scan_times)
 
     # Choose the solution interval for the bandpass calibrator
@@ -139,7 +120,7 @@ for obs_metadata in obs_metadatas:
     bpcal_sol_int = min(s.length for s in field_scan_map[bandpass_cal.name])
 
     # Compute observation time on target
-    target_scan_times = total_scan_times(field_scan_map, targets)
+    target_scan_times = vmu.total_scan_times(field_scan_map, targets)
 
     # Get field ids for bandpass, gaincal and target
     bpcal_field = field_index[bandpass_cal.name]
@@ -324,15 +305,10 @@ for obs_metadata in obs_metadatas:
         dghz = calibrator_db[bandpass_cal.name]["d_ghz"]
 
         # Find the brightness at reference frequency
-        I, a, b, c, d = convert_pb_to_casaspi(freq_0 / 1e9 -
-                                              (nchans // 2) * chan_bandwidth / 1e9,
-                                              freq_0 / 1e9 +
-                                              (nchans // 2) * chan_bandwidth / 1e9,
-                                              freq_0 / 1e9,
-                                              aghz,
-                                              bghz,
-                                              cghz,
-                                              dghz)
+        I, a, b, c, d = vmcp.convert_pb_to_casaspi(
+            freq_0 / 1e9 - (nchans // 2) * chan_bandwidth / 1e9,
+            freq_0 / 1e9 + (nchans // 2) * chan_bandwidth / 1e9,
+            freq_0 / 1e9, aghz, bghz, cghz, dghz)
 
         vermeerkat.log.info("Using bandpass calibrator %s "
                             "with brightness of %.4f Jy "
