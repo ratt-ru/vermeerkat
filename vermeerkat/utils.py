@@ -93,21 +93,21 @@ def categorise_sources(scans):
 
     return source_index, bandpass_cal_candidates, gain_cal_candidates, targets
 
-def create_scan_map(scans):
-    """ Map from scan target name to list of scans containing target """
-    scan_map = defaultdict(list)
+def create_field_scan_map(scans):
+    """ Map from scan field to list of scans containing field """
+    field_scan_map = defaultdict(list)
 
     for scan in scans:
-        scan_map[scan.name].append(scan)
+        field_scan_map[scan.name].append(scan)
 
-    return scan_map
+    return field_scan_map
 
-def total_scan_times(scan_map, scan_targets):
+def total_scan_times(field_scan_map, scan_targets):
     """
     Return a list of total_scan_times
     for each target in scan_targets
     """
-    return [sum(s.length for s in scan_map[st.name])
+    return [sum(s.length for s in field_scan_map[st.name])
                                     for st in scan_targets]
 
 def select_gain_calibrator(targets, gaincals):

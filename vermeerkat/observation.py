@@ -41,7 +41,8 @@ def standard_observation_query():
     # Construct the query
     return ' AND '.join('%s:%s' % (fq.field, fq.query) for fq in query_list)
 
-def get_observations(input_dir, cfg):
+def observation_metadatas(input_dir, cfg):
+    """ Return a list of observation metadatas """
     # If a specific HDF5 file is specified, attempt to load local metadata first
     if cfg.general.hdf5_file is not None:
         basename = os.path.splitext(cfg.general.hdf5_file)[0]

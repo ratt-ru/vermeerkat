@@ -35,7 +35,7 @@ from vermeerkat.observation import (query_recent_observations,
                                     download_observation,
                                     load_observation_metadata,
                                     dump_observation_metadata,
-                                    get_observations,
+                                    observation_metadatas,
                                     valid_observation_exists)
 
 from vermeerkat.utils import *
@@ -79,24 +79,25 @@ PREFIX = cfg.general.prefix
 MSDIR  = cfg.general.msdir
 
 # Get a list of observations
-observations = get_observations(INPUT, cfg)
+obs_metadatas = observation_metadatas(INPUT, cfg)
 
-if len(observations) == 0:
-    vermeerkat.log.warn("No observations matching query string '{}'".format(query))
+if len(obs_metadatas) == 0:
+    vermeerkat.log.warn("No observations found for given parameters")
 
 # Image each observation
-for o in observations:
+for obs_metadata in obs_metadatas:
     # Configure filenames
-    h5file = o['Filename']
+    h5file = obs_metadata['Filename']
     basename = os.path.splitext(h5file)[0]
     msfile = ''.join((basename, '.ms'))
 
     # Dump the observation metadata
-    dump_observation_metadata(INPUT, ''.join([basename, '.json']), o)
+    dump_observation_metadata(INPUT, ''.join([basename, '.json']),
+        obs_metadata)
 
     # Download if no valid observation exists
-    if not valid_observation_exists(INPUT, h5file, o):
-        download_observation(INPUT, o)
+    if not valid_observation_exists(INPUT, h5file, obs_metadata):
+        download_observation(INPUT, obs_metadata)
 
     # Calibrator tables
     delaycal_table = "%s.K0:output" % (basename)
@@ -106,13 +107,13 @@ for o in observations:
     bpasscal_table = "%s.B0:output" % (basename)
 
     # Get observation properties from the metadata
-    obs_props = create_observation_properties(o, cfg)
+    obs_props = create_observation_properties(obs_metadata, cfg)
 
     # Load in scans
     scans = load_scans(os.path.join(INPUT, h5file))
 
     # Map scan target name to a list of scans associated with it
-    scan_map = create_scan_map(scans)
+    field_scan_map = create_field_scan_map(scans)
 
     # Categories the source observed in each scan
     field_index, bpcals, gaincals, targets = categorise_sources(scans)
@@ -123,34 +124,34 @@ for o in observations:
 
     if len(targets) < 1:
         raise RuntimeError("Observation %s does not have any "
-                           "targets" % o["ProductName"])
+                           "targets" % obs_metadata["ProductName"])
     if len(gaincals) < 1:
         raise RuntimeError("Observation %s does not have any "
-                           "gain calibrators" % o["ProductName"])
+                           "gain calibrators" % obs_metadata["ProductName"])
     if len(bpcals) < 1:
         raise RuntimeError("Observation %s does not have any "
-                           "bandpass calibrators" % o["ProductName"])
+                           "bandpass calibrators" % obs_metadata["ProductName"])
 
     # Select a gain calibrator
     gaincal_index, gain_cal = select_gain_calibrator(targets, gaincals)
     # Compute the observation time spent on gain calibrators
-    gaincal_scan_times = total_scan_times(scan_map, gaincals)
+    gaincal_scan_times = total_scan_times(field_scan_map, gaincals)
 
     # Remove gain calibrator from the bandpass calibrators
     bpcals = [x for x in bpcals if not x.name == gain_cal.name]
 
     # Compute observation time on bandpass calibrators
-    bandpass_scan_times = total_scan_times(scan_map, bpcals)
+    bandpass_scan_times = total_scan_times(field_scan_map, bpcals)
     # Select the bandpass calibrator
     bpcal_index, bandpass_cal = select_bandpass_calibrator(bpcals,
                                                 bandpass_scan_times)
 
     # Choose the solution interval for the bandpass calibrator
     # by choosing the bandpass calibrator's minimum scan length
-    bpcal_sol_int = min(s.length for s in scan_map[bandpass_cal.name])
+    bpcal_sol_int = min(s.length for s in field_scan_map[bandpass_cal.name])
 
     # Compute observation time on target
-    target_scan_times = total_scan_times(scan_map, targets)
+    target_scan_times = total_scan_times(field_scan_map, targets)
 
     # Get field ids for bandpass, gaincal and target
     bpcal_field = field_index[bandpass_cal.name]
