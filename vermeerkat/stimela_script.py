@@ -112,9 +112,6 @@ for obs_metadata in obs_metadatas:
     # Compute the observation time spent on gain calibrators
     gaincal_scan_times = vmu.total_scan_times(field_scan_map, gaincals)
 
-    # Remove gain calibrator from the bandpass calibrators
-    bpcals = [x for x in bpcals if not x.name == gain_cal.name]
-
     # Compute observation time on bandpass calibrators
     bandpass_scan_times = vmu.total_scan_times(field_scan_map, bpcals)
     # Select the bandpass calibrator
