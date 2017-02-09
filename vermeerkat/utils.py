@@ -15,12 +15,20 @@ class ObservationProperties(object):
             setattr(self, k, v)
 
 def merge_observation_metadata(cfg, obs_metadata):
+    """ Merge observation metadata into the obs field of the configuration """
     cfg.obs = obs = ObservationProperties()
 
     # Configure filenames
     obs.h5file = obs_metadata['Filename']
     obs.basename = os.path.splitext(obs.h5file)[0]
     obs.msfile = ''.join((obs.basename, '.ms'))
+
+    # Calibrator tables
+    obs.delaycal_table = "%s.K0:output" % obs.basename
+    obs.phasecal_table = "%s.G0:output" % obs.basename
+    obs.ampcal_table = "%s.G1:output" % obs.basename
+    obs.fluxcal_table = "%s.fluxscale:output" % obs.basename
+    obs.bpasscal_table = "%s.B0:output" % obs.basename
 
     #Observation properties
     obs.refant = str(obs_metadata["RefAntenna"])
@@ -43,13 +51,6 @@ def merge_observation_metadata(cfg, obs_metadata):
     obs.bw_per_image_slice = 100.0e6
     obs.im_numchans = int(np.ceil(obs_metadata["ChannelWidth"] * obs.nchans / obs.bw_per_image_slice))
 
-    # Calibrator tables
-    obs.delaycal_table = "%s.K0:output" % obs.basename
-    obs.phasecal_table = "%s.G0:output" % obs.basename
-    obs.ampcal_table = "%s.G1:output" % obs.basename
-    obs.fluxcal_table = "%s.fluxscale:output" % obs.basename
-    obs.bpasscal_table = "%s.B0:output" % obs.basename
-
 def load_scans(h5filename):
     """ Load scan info from an h5 file """
     d = katdal.open(h5filename)
@@ -60,33 +61,35 @@ def load_scans(h5filename):
              for (scan_index, state, target) in d.scans()
              if state == "track"]
 
-def categorise_sources(scans):
-    """ Categorise sources """
+def categorise_fields(scans):
+    """
+    Categorise fields into targets, gain calibrators and bandpass calibrators
+    """
     bandpass_cal_candidates = []
     gain_cal_candidates = []
     targets = []
     source_index = {}
 
     for scan_info in scans:
-        categorised_source = False
+        categorise_field = False
 
         if scan_info.name in source_index:
             continue
 
         if "bpcal" in scan_info.tags:
             bandpass_cal_candidates.append(scan_info)
-            categorised_source = True
+            categorise_field = True
 
         if "gaincal" in scan_info.tags:
             gain_cal_candidates.append(scan_info)
-            categorised_source = True
+            categorise_field = True
 
         if "target" in scan_info.tags:
             targets.append(scan_info)
-            categorised_source = True
+            categorise_field = True
 
-        if not categorised_source:
-            vermeerkat.log.warn("Not using observed source %s" % name)
+        if not categorise_field:
+            vermeerkat.log.warn("Not using observed field %s" % name)
             continue
 
         source_index[scan_info.name] = len(source_index)

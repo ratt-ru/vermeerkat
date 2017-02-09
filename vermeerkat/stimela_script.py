@@ -103,8 +103,8 @@ for obs_metadata in obs_metadatas:
     # Map scan target name to a list of scans associated with it
     field_scan_map = create_field_scan_map(scans)
 
-    # Categories the source observed in each scan
-    field_index, bpcals, gaincals, targets = categorise_sources(scans)
+    # Categories the fields observed in each scan
+    field_index, bpcals, gaincals, targets = categorise_fields(scans)
 
     # Use nicer names for source plots
     plot_name = { s: s.replace(' ', '_') for s
