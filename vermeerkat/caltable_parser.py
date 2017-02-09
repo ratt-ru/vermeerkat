@@ -8,7 +8,7 @@ def read_caltable(filename):
         and returns a dictionary containing the following
         :filename: filename of caltable database
         :returns: for every source (name = key):
-                    Epoch, RA, Declination, 
+                    Epoch, RA, Declination,
                     a_ghz, b_ghz, c_ghz, d_ghz,
                     a_mhz, b_mhz, c_mhz, d_mhz
     """
@@ -34,7 +34,7 @@ def read_caltable(filename):
                               r"a=(?P<a>[+\-]?[0-9]+(?:.[0-9]+)?)[ ]+"
                               r"b=(?P<b>[+\-]?[0-9]+(?:.[0-9]+)?)[ ]+"
                               r"c=(?P<c>[+\-]?[0-9]+(?:.[0-9]+)?)[ ]+"
-                              r"d=(?P<d>[+\-]?[0-9]+(?:.[0-9]+)?)$", 
+                              r"d=(?P<d>[+\-]?[0-9]+(?:.[0-9]+)?)$",
                               command)
             #else illegal
             if not valset:
@@ -42,7 +42,7 @@ def read_caltable(filename):
                                    "southern standard at line %d:'%s'" %
                                    (ln_no, line))
 
-            # parse sources (spectra in MHz) 
+            # parse sources (spectra in MHz)
             name = valset.group("name")
             epoch = int(valset.group("epoch"))
             ra = valset.group("ra")
@@ -90,6 +90,17 @@ def read_caltable(filename):
             ln_no += 1
 
         return calibrator_db
+
+def format_calibrator_db(calibrator_db):
+  """ Return multiline string describing the calibrator database """
+  lines = [""]
+  lines.extend(["\t%s\tEpoch:%d\tRA:%3.2f\tDEC:%3.2f\t"
+           "a:%.4f\tb:%.4f\tc:%.4f\td:%.4f" %
+              (name, db["epoch"], db["ra"], db["decl"],
+              db["a_ghz"], db["b_ghz"], db["c_ghz"], db["d_ghz"])
+        for name, db in calibrator_db.iteritems()])
+
+  return '\n'.join(lines)
 
 def convert_pb_to_casaspi(vlower, vupper, v0, a, b, c, d):
     """

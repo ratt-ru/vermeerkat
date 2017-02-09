@@ -21,41 +21,28 @@
 import ast
 import os
 import sys
-import numpy as np
 import re
-import stimela
-import vermeerkat
 import glob
-from vermeerkat.caltable_parser import read_caltable
-from vermeerkat.caltable_parser import convert_pb_to_casaspi
 from functools import reduce
 
-from vermeerkat.config import configuration
+import numpy as np
+
+import stimela
+import vermeerkat
+import vermeerkat.caltable_parser as vmcp
+import vermeerkat.config as vmc
 import vermeerkat.observation as vmo
 import vermeerkat.utils as vmu
 
 # There isn't a Southern standard in CASA
 # so construct a little database of them for reference
 vermeerkat.log.info("Parsing calibrator table")
-ref_table = os.path.dirname(
-    os.path.abspath(vermeerkat.__file__)) + "/southern_calibrators.txt"
-calibrator_db = read_caltable(ref_table)
+
+ref_table = os.path.join(vermeerkat.install_path(), "southern_calibrators.txt")
+calibrator_db = vmcp.read_caltable(ref_table)
 
 vermeerkat.log.info("Found the following reference calibrators (in GHz format):")
-for key in calibrator_db:
-    name = key
-    epoch = calibrator_db[name]["epoch"]
-    ra = calibrator_db[name]["ra"]
-    decl = calibrator_db[name]["decl"]
-    ag = calibrator_db[name]["a_ghz"]
-    bg = calibrator_db[name]["b_ghz"]
-    cg = calibrator_db[name]["c_ghz"]
-    dg = calibrator_db[name]["d_ghz"]
-    vermeerkat.log.info("\t%s\tEpoch:%d\tRA:%3.2f\tDEC:%3.2f\t"
-                       "a:%.4f\tb:%.4f\tc:%.4f\td:%.4f" %
-        (name, epoch, ra, decl, ag, bg, cg, dg))
-
-
+vermeerkat.log.info(vmcp.format_calibrator_db(calibrator_db))
 # So that we can access GLOBALS pass through to the run command
 stimela.register_globals()
 
@@ -64,7 +51,7 @@ stimela.register_globals()
 args = ast.literal_eval(args)
 
 # Load in the configuration
-cfg = configuration(args)
+cfg = vmc.configuration(args)
 # Register directories
 
 INPUT = cfg.general.input
@@ -318,15 +305,10 @@ for obs_metadata in obs_metadatas:
         dghz = calibrator_db[bandpass_cal.name]["d_ghz"]
 
         # Find the brightness at reference frequency
-        I, a, b, c, d = convert_pb_to_casaspi(freq_0 / 1e9 -
-                                              (nchans // 2) * chan_bandwidth / 1e9,
-                                              freq_0 / 1e9 +
-                                              (nchans // 2) * chan_bandwidth / 1e9,
-                                              freq_0 / 1e9,
-                                              aghz,
-                                              bghz,
-                                              cghz,
-                                              dghz)
+        I, a, b, c, d = vmcp.convert_pb_to_casaspi(
+            freq_0 / 1e9 - (nchans // 2) * chan_bandwidth / 1e9,
+            freq_0 / 1e9 + (nchans // 2) * chan_bandwidth / 1e9,
+            freq_0 / 1e9, aghz, bghz, cghz, dghz)
 
         vermeerkat.log.info("Using bandpass calibrator %s "
                             "with brightness of %.4f Jy "
