@@ -29,20 +29,11 @@ import numpy as np
 
 import stimela
 import vermeerkat
-import vermeerkat.caltable_parser as vmcp
+import vermeerkat.caltables as vmct
 import vermeerkat.config as vmc
 import vermeerkat.observation as vmo
 import vermeerkat.utils as vmu
 
-# There isn't a Southern standard in CASA
-# so construct a little database of them for reference
-vermeerkat.log.info("Parsing calibrator table")
-
-ref_table = os.path.join(vermeerkat.install_path(), "southern_calibrators.txt")
-calibrator_db = vmcp.read_caltable(ref_table)
-
-vermeerkat.log.info("Found the following reference calibrators (in GHz format):")
-vermeerkat.log.info(vmcp.format_calibrator_db(calibrator_db))
 # So that we can access GLOBALS pass through to the run command
 stimela.register_globals()
 
@@ -58,6 +49,9 @@ INPUT = cfg.general.input
 OUTPUT = cfg.general.output
 PREFIX = cfg.general.prefix
 MSDIR  = cfg.general.msdir
+
+# Get list of custom calibrators
+calibrator_db = vmct.calibrator_database()
 
 # Get a list of observations
 obs_metadatas = vmo.observation_metadatas(INPUT, cfg)
