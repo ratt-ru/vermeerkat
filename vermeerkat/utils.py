@@ -13,7 +13,7 @@ class ObservationProperties(object):
         for k, v in kwargs.iteritems():
             setattr(self, k, v)
 
-def create_observation_properties(obs_meta, cfg):
+def merge_observation_metadata(cfg, obs_meta):
     #Observation properties
     refant = str(obs_meta["RefAntenna"])
     correlator_integration_time = obs_meta["DumpPeriod"]
@@ -35,7 +35,7 @@ def create_observation_properties(obs_meta, cfg):
     bw_per_image_slice = 100.0e6
     im_numchans = int(np.ceil(obs_meta["ChannelWidth"] * nchans / bw_per_image_slice))
 
-    return ObservationProperties(refant=refant,
+    cfg.obs =  ObservationProperties(refant=refant,
         correlator_integration_time=correlator_integration_time,
         gain_sol_int=gain_sol_int,
         freq_0=freq_0,

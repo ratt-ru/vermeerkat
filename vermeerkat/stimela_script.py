@@ -106,8 +106,8 @@ for obs_metadata in obs_metadatas:
     fluxcal_table = "%s.fluxscale:output" % (basename)
     bpasscal_table = "%s.B0:output" % (basename)
 
-    # Get observation properties from the metadata
-    obs_props = create_observation_properties(obs_metadata, cfg)
+    # Merge observation metadata into our config
+    merge_observation_metadata(cfg, obs_metadata)
 
     # Load in scans
     scans = load_scans(os.path.join(INPUT, h5file))
@@ -203,23 +203,23 @@ for obs_metadata in obs_metadatas:
                             cfg.rfimask.rfi_mask_file)
     vermeerkat.log.info("Correlator integration interval "
                         "recorded as: %.2f secs" %
-                            obs_props.correlator_integration_time)
+                            cfg.obs.correlator_integration_time)
     vermeerkat.log.info("MFS maps will contain %.3f MHz per slice" %
-                            (obs_props.bw_per_image_slice / 1e6))
+                            (cfg.obs.bw_per_image_slice / 1e6))
     vermeerkat.log.info("Maps will cover %.3f square degrees at "
                         "angular resolution %.3f asec" %
-                            (obs_props.fov / 3600.0,
-                            obs_props.angular_resolution))
+                            (cfg.obs.fov / 3600.0,
+                            cfg.obs.angular_resolution))
     vermeerkat.log.warn("Assuming maximum baseline "
                         "is %.2f meters" %
-                            obs_props.telescope_max_baseline)
+                            cfg.obs.telescope_max_baseline)
     vermeerkat.log.info("Will use '%s' as reference antenna" %
-                            obs_props.refant)
+                            cfg.obs.refant)
     vermeerkat.log.info("Observed band covers %.2f MHz "
                         "+/- %.2f MHz averaged into %d channels" %
-                        (obs_props.freq_0 / 1e6,
-                        (obs_props.nchans // 2) * obs_props.chan_bandwidth / 1e6,
-                        obs_props.nchans))
+                        (cfg.obs.freq_0 / 1e6,
+                        (cfg.obs.nchans // 2) * cfg.obs.chan_bandwidth / 1e6,
+                        cfg.obs.nchans))
 
     # All good to go fire up the pipeline
     recipe = stimela.Recipe("1GC Pipeline", ms_dir=MSDIR)
@@ -392,7 +392,7 @@ for obs_metadata in obs_metadatas:
             "gaintype"      : cfg.delaycal.gaintype,
             "solint"        : cfg.delaycal.solint,
             "minsnr"        : cfg.delaycal.minsnr,
-            "refant"        : obs_props.refant,
+            "refant"        : cfg.obs.refant,
             "caltable"      : delaycal_table,
             "calmode"       : cfg.delaycal.calmode,
         },
@@ -406,9 +406,9 @@ for obs_metadata in obs_metadatas:
             "msname"        :   msfile,
             "caltable"      :   phasecal_table,
             "field"         :   str(bpcal_field),
-            "refant"        :   obs_props.refant,
+            "refant"        :   cfg.obs.refant,
             "calmode"       :   cfg.phase0.calmode,
-            "solint"        :   obs_props.gain_sol_int,
+            "solint"        :   cfg.obs.gain_sol_int,
             "solnorm"       :   cfg.phase0.solnorm,
             "minsnr"        :   cfg.phase0.minsnr,
             "gaintable"     :   [delaycal_table],
@@ -425,7 +425,7 @@ for obs_metadata in obs_metadatas:
             "caltable"      :   bpasscal_table,
             "field"         :   str(bpcal_field),
             "spw"           :   cfg.bandpass.spw,
-            "refant"        :   obs_props.refant,
+            "refant"        :   cfg.obs.refant,
             "solnorm"       :   cfg.bandpass.solnorm,
             "combine"       :   cfg.bandpass.combine,
             "solint"        :   str(bpcal_sol_int) + "s",
@@ -448,8 +448,8 @@ for obs_metadata in obs_metadatas:
             "field"        :   ",".join([str(x) for
                                         x in [bpcal_field, gaincal_field]]),
             "spw"          :   cfg.gaincal.spw,
-            "solint"       :   obs_props.gain_sol_int,
-            "refant"       :   obs_props.refant,
+            "solint"       :   cfg.obs.gain_sol_int,
+            "refant"       :   cfg.obs.refant,
             "gaintype"     :   cfg.gaincal.gaintype,
             "calmode"      :   cfg.gaincal.calmode,
             "solnorm"      :   cfg.gaincal.solnorm,
@@ -697,11 +697,11 @@ for obs_metadata in obs_metadatas:
                 "msname"            : msfile,
                 "column"            : cfg.wsclean_image.column,
                 "weight"            : "briggs %.2f"%(cfg.wsclean_image.robust),
-                "npix"              : obs_props.im_npix,
-                "cellsize"          : obs_props.angular_resolution*obs_props.sampling,
+                "npix"              : cfg.obs.im_npix,
+                "cellsize"          : cfg.obs.angular_resolution*cfg.obs.sampling,
                 "clean_iterations"  : cfg.wsclean_image.clean_iterations,
                 "mgain"             : cfg.wsclean_image.mgain,
-                "channelsout"       : obs_props.im_numchans,
+                "channelsout"       : cfg.obs.im_numchans,
                 "joinchannels"      : cfg.wsclean_image.joinchannels,
                 "field"             : target_field,
                 "name"              : imname,
@@ -718,11 +718,11 @@ for obs_metadata in obs_metadatas:
             "msname"            : msfile,
             "column"            : cfg.wsclean_bandpass.column,
             "weight"            : "briggs %.2f"%(cfg.wsclean_bandpass.robust),
-            "npix"              : obs_props.im_npix / 2, # don't need the full FOV
-            "cellsize"          : obs_props.angular_resolution * obs_props.sampling,
+            "npix"              : cfg.obs.im_npix / 2, # don't need the full FOV
+            "cellsize"          : cfg.obs.angular_resolution * cfg.obs.sampling,
             "clean_iterations"  : cfg.wsclean_bandpass.clean_iterations,
             "mgain"             : cfg.wsclean_bandpass.mgain,
-            "channelsout"       : obs_props.im_numchans,
+            "channelsout"       : cfg.obs.im_numchans,
             "joinchannels"      : cfg.wsclean_bandpass.joinchannels,
             "field"             : str(bpcal_field),
             "name"              : basename + "_bp_" + plot_name[bandpass_cal.name],
@@ -736,11 +736,11 @@ for obs_metadata in obs_metadatas:
             "msname"            : msfile,
             "column"            : cfg.wsclean_gain.column,
             "weight"            : "briggs %.2f"%(cfg.wsclean_gain.robust),
-            "npix"              : obs_props.im_npix / 2, # don't need the full FOV
-            "cellsize"          : obs_props.angular_resolution*obs_props.sampling,
+            "npix"              : cfg.obs.im_npix / 2, # don't need the full FOV
+            "cellsize"          : cfg.obs.angular_resolution*cfg.obs.sampling,
             "clean_iterations"  : cfg.wsclean_gain.clean_iterations,
             "mgain"             : cfg.wsclean_gain.mgain,
-            "channelsout"       : obs_props.im_numchans,
+            "channelsout"       : cfg.obs.im_numchans,
             "joinchannels"      : cfg.wsclean_gain.joinchannels,
             "field"             : str(gaincal_field),
             "name"              : basename + "_gc_" + plot_name[gain_cal.name],
@@ -826,7 +826,7 @@ for obs_metadata in obs_metadatas:
         cubename = basename + "_1GC_" + plot_name[target.name] + "-CLEAN_cube.fits"
         recipe.add("cab/fitstool", "fitstool",
             {
-                "image"     : [ '%s-%04d-image.fits:output'%(imname_prefix, a) for a in range(obs_props.im_numchans) ],
+                "image"     : [ '%s-%04d-image.fits:output'%(imname_prefix, a) for a in range(cfg.obs.im_numchans) ],
                 "output"    : cubename,
                 "stack"     : True,
                 "fits-axis" : 3,
@@ -843,7 +843,7 @@ for obs_metadata in obs_metadatas:
                 "input-skymodel"        :   "%s:output"%model_name, # model to which SPIs must be added
                 "output-skymodel"       :   model_name,
                 "tolerance-range"       :   cfg.specfit.tol,
-                "freq0"                 :   obs_props.freq_0,    # reference frequency for SPI calculation
+                "freq0"                 :   cfg.obs.freq_0,    # reference frequency for SPI calculation
                 "sigma-level"           :   cfg.specfit.sigma,
             },
             input=INPUT, output=OUTPUT,
@@ -859,7 +859,7 @@ for obs_metadata in obs_metadatas:
                 "column"    :   cfg.selfcal.column,
                 "output-data"    :   cfg.selfcal.output,
                 "Gjones"    :   cfg.selfcal.gjones,
-                "Gjones-solution-intervals" : map(int, [float(obs_props.gain_sol_int[:-1]), obs_props.nchans / float(1000)]),
+                "Gjones-solution-intervals" : map(int, [float(cfg.obs.gain_sol_int[:-1]), cfg.obs.nchans / float(1000)]),
                 "DDjones-smoothing-intervals" :  cfg.selfcal.ddjones_smoothing,
                 # TODO: MeerKAT beams need to go in this section
                 "Ejones"    :   cfg.selfcal.ejones,
@@ -880,11 +880,11 @@ for obs_metadata in obs_metadatas:
                 "msname"            : msfile,
                 "column"            : cfg.wsclean_selfcal.column,
                 "weight"            : "briggs %2.f"%(cfg.wsclean_selfcal.robust),
-                "npix"              : obs_props.im_npix,
-                "cellsize"          : obs_props.angular_resolution*obs_props.sampling,
+                "npix"              : cfg.obs.im_npix,
+                "cellsize"          : cfg.obs.angular_resolution*cfg.obs.sampling,
                 "clean_iterations"  : cfg.wsclean_selfcal.clean_iterations,
                 "mgain"             : cfg.wsclean_selfcal.mgain,
-                "channelsout"       : obs_props.im_numchans,
+                "channelsout"       : cfg.obs.im_numchans,
                 "joinchannels"      : cfg.wsclean_selfcal.joinchannels,
                 "field"             : str(target_field),
                 "name"              : imname_prefix,
@@ -918,11 +918,11 @@ for obs_metadata in obs_metadatas:
             "msname"            : msfile,
             "column"            : cfg.wsclean_v_residue.column,
             "weight"            : "briggs %.2f"%(cfg.wsclean_v_residue.robust),
-            "npix"              : obs_props.im_npix,
-            "cellsize"          : obs_props.angular_resolution*obs_props.sampling,
+            "npix"              : cfg.obs.im_npix,
+            "cellsize"          : cfg.obs.angular_resolution*cfg.obs.sampling,
             "clean_iterations"  : cfg.wsclean_v_residue.clean_iterations,
             "mgain"             : cfg.wsclean_v_residue.mgain,
-            "channelsout"       : obs_props.im_numchans,
+            "channelsout"       : cfg.obs.im_numchans,
             "joinchannels"      : cfg.wsclean_v_residue.joinchannels,
             "field"             : str(target_field),
             "name"              : imname_prefix,
