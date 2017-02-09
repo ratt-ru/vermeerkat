@@ -81,6 +81,18 @@ for obs_metadata in obs_metadatas:
     # Categories the fields observed in each scan
     field_index, bpcals, gaincals, targets = vmu.categorise_fields(scans)
 
+    # Alias a long name
+    default_bpcal = cfg.general.bandpass_calibrator
+
+    if default_bpcal:
+        # If a default bandpass calibrator has been specified,
+        # filter out other bandpass calibrators. We still need
+        # to extract it from the standard below
+        vermeerkat.log.info("Bandpass calibrator manually "
+                            "set to '%s'. Other bandpass "
+                            "calibrators will be ignored." % default_bpcal)
+        bpcals = [b for b in bpcals if not b.name == default_bpcal]
+
     # Use nicer names for source plots
     plot_name = { s: s.replace(' ', '_') for s
                                     in field_index.keys() }
