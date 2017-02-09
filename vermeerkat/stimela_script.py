@@ -86,31 +86,19 @@ if len(obs_metadatas) == 0:
 
 # Image each observation
 for obs_metadata in obs_metadatas:
-    # Configure filenames
-    h5file = obs_metadata['Filename']
-    basename = os.path.splitext(h5file)[0]
-    msfile = ''.join((basename, '.ms'))
-
-    # Dump the observation metadata
-    dump_observation_metadata(INPUT, ''.join([basename, '.json']),
-        obs_metadata)
-
-    # Download if no valid observation exists
-    if not valid_observation_exists(INPUT, h5file, obs_metadata):
-        download_observation(INPUT, obs_metadata)
-
-    # Calibrator tables
-    delaycal_table = "%s.K0:output" % (basename)
-    phasecal_table = "%s.G0:output" % (basename)
-    ampcal_table = "%s.G1:output" % (basename)
-    fluxcal_table = "%s.fluxscale:output" % (basename)
-    bpasscal_table = "%s.B0:output" % (basename)
-
     # Merge observation metadata into our config
     merge_observation_metadata(cfg, obs_metadata)
 
+    # Dump the observation metadata
+    dump_observation_metadata(INPUT, ''.join([cfg.obs.basename, '.json']),
+        obs_metadata)
+
+    # Download if no valid observation exists
+    if not valid_observation_exists(INPUT, cfg.obs.h5file, obs_metadata):
+        download_observation(INPUT, obs_metadata)
+
     # Load in scans
-    scans = load_scans(os.path.join(INPUT, h5file))
+    scans = load_scans(os.path.join(INPUT, cfg.obs.h5file))
 
     # Map scan target name to a list of scans associated with it
     field_scan_map = create_field_scan_map(scans)
@@ -194,7 +182,7 @@ for obs_metadata in obs_metadatas:
     vermeerkat.log.info("Imaging the following targets: '%s' (%s)" %
                             (",".join([t.name for t in targets]),
                              ",".join([str(field_index[t.name]) for t in targets])))
-    vermeerkat.log.info("Writing ms file to '%s'" % msfile)
+    vermeerkat.log.info("Writing ms file to '%s'" % cfg.obs.msfile)
     vermeerkat.log.info("Using firstpass aoflagger strategy: %s" %
                             cfg.autoflag.strategy_file)
     vermeerkat.log.info("Using secondpass aoflagger strategy: %s" %
@@ -227,8 +215,8 @@ for obs_metadata in obs_metadatas:
     # Convert
     recipe.add("cab/h5toms", "h5toms",
         {
-            'hdf5files'  : [h5file],
-            'output-ms'  : msfile,
+            'hdf5files'  : [cfg.obs.h5file],
+            'output-ms'  : cfg.obs.msfile,
             'model-data' : True,
             'full_pol'   : cfg.h5toms.full_pol,
         },
@@ -239,7 +227,7 @@ for obs_metadata in obs_metadatas:
     # RFI and bad channel flagging
     recipe.add("cab/rfimasker", "mask_stuff",
         {
-            "msname" : msfile,
+            "msname" : cfg.obs.msfile,
             "mask"   : cfg.rfimask.rfi_mask_file,
         },
         input=INPUT, output=OUTPUT,
@@ -247,7 +235,7 @@ for obs_metadata in obs_metadatas:
 
     recipe.add("cab/autoflagger", "auto_flag_rfi",
         {
-            "msname"    : msfile,
+            "msname"    : cfg.obs.msfile,
             "column"    : cfg.autoflag.column,
             "strategy"  : cfg.autoflag.strategy_file,
         },
@@ -257,7 +245,7 @@ for obs_metadata in obs_metadatas:
     # Custom user specified flags
     # Casa does not sensibly do nothing if the defaults are specified
     # removing this step
-#    userflags = {"msname" : msfile}
+#    userflags = {"msname" : cfg.obs.msfile}
 #    if cfg.flag_userflags.mode is not None:
 #        userflags["mode"] = cfg.flag_userflags.mode
 #    if cfg.flag_userflags.field is not None:
@@ -280,7 +268,7 @@ for obs_metadata in obs_metadatas:
 
     recipe.add("cab/casa_flagdata", "flag_bad_start_channels",
         {
-            "msname"    :   msfile,
+            "msname"    :   cfg.obs.msfile,
             "mode"      :   cfg.flag_bandstart.mode,
             "field"     :   cfg.flag_bandstart.field,
             "spw"       :   cfg.flag_bandstart.spw,
@@ -291,7 +279,7 @@ for obs_metadata in obs_metadatas:
 
     recipe.add("cab/casa_flagdata", "flag_bad_end_channels",
         {
-            "msname"    :   msfile,
+            "msname"    :   cfg.obs.msfile,
             "mode"      :   cfg.flag_bandend.mode,
             "field"     :   cfg.flag_bandend.field,
             "spw"       :   cfg.flag_bandend.spw,
@@ -302,7 +290,7 @@ for obs_metadata in obs_metadatas:
 
     recipe.add("cab/casa_flagdata", "flag_autocorrs",
         {
-            "msname"    :   msfile,
+            "msname"    :   cfg.obs.msfile,
             "mode"      :   cfg.flag_autocorrs.mode,
             "field"     :   cfg.flag_autocorrs.field,
             "spw"       :   cfg.flag_autocorrs.spw,
@@ -316,8 +304,8 @@ for obs_metadata in obs_metadatas:
     # and be dead sure things will always work!
     recipe.add("cab/casa_fixvis", "fixvis",
         {
-            "vis"       :   msfile,
-            "outputvis" :   msfile, # into same ms please
+            "vis"       :   cfg.obs.msfile,
+            "outputvis" :   cfg.obs.msfile, # into same ms please
             "reuse"     :   cfg.casa_fixvis.reuse,
         },
         input=INPUT, output=OUTPUT,
@@ -357,7 +345,7 @@ for obs_metadata in obs_metadatas:
         # 1GC Calibration
         recipe.add("cab/casa_setjy", "init_flux_scaling",
             {
-                "msname"        :   msfile,
+                "msname"        :   cfg.obs.msfile,
                 "field"         :   str(bpcal_field),
                 "standard"      :   cfg.setjy_manual.standard,
                 "fluxdensity"   :   I,
@@ -373,7 +361,7 @@ for obs_metadata in obs_metadatas:
         # If model is not in @Ben's southern calibrators, then use CASA model.
         # If this is the case, the standard must be specified in the config file
         recipe.add('cab/casa_setjy', 'flux_scaling', {
-            "msname"    :   msfile,
+            "msname"    :   cfg.obs.msfile,
             "standard"  :   cfg.setjy_auto.standard,
             "field"     :   str(bpcal_field)
             },
@@ -387,13 +375,13 @@ for obs_metadata in obs_metadatas:
     # bright bandpass and gain calibrator sources).
     recipe.add("cab/casa_gaincal", "delay_cal",
         {
-            "msname"        : msfile,
+            "msname"        : cfg.obs.msfile,
             "field"         : str(gaincal_field),
             "gaintype"      : cfg.delaycal.gaintype,
             "solint"        : cfg.delaycal.solint,
             "minsnr"        : cfg.delaycal.minsnr,
             "refant"        : cfg.obs.refant,
-            "caltable"      : delaycal_table,
+            "caltable"      : cfg.obs.delaycal_table,
             "calmode"       : cfg.delaycal.calmode,
         },
         input=INPUT, output=OUTPUT,
@@ -403,15 +391,15 @@ for obs_metadata in obs_metadatas:
     # so lets do a preliminary phase cal to correct for this
     recipe.add("cab/casa_gaincal", "init_phase_cal",
         {
-            "msname"        :   msfile,
-            "caltable"      :   phasecal_table,
+            "msname"        :   cfg.obs.msfile,
+            "caltable"      :   cfg.obs.phasecal_table,
             "field"         :   str(bpcal_field),
             "refant"        :   cfg.obs.refant,
             "calmode"       :   cfg.phase0.calmode,
             "solint"        :   cfg.obs.gain_sol_int,
             "solnorm"       :   cfg.phase0.solnorm,
             "minsnr"        :   cfg.phase0.minsnr,
-            "gaintable"     :   [delaycal_table],
+            "gaintable"     :   [cfg.obs.delaycal_table],
         },
         input=INPUT, output=OUTPUT,
         label="phase0:: Initial phase calibration")
@@ -421,8 +409,8 @@ for obs_metadata in obs_metadatas:
     # over time... this will be very bad for your reduction.
     recipe.add("cab/casa_bandpass", "bandpass_cal",
         {
-            "msname"        :   msfile,
-            "caltable"      :   bpasscal_table,
+            "msname"        :   cfg.obs.msfile,
+            "caltable"      :   cfg.obs.bpasscal_table,
             "field"         :   str(bpcal_field),
             "spw"           :   cfg.bandpass.spw,
             "refant"        :   cfg.obs.refant,
@@ -432,8 +420,8 @@ for obs_metadata in obs_metadatas:
             "bandtype"      :   cfg.bandpass.bandtype,
             "minblperant"   :   cfg.bandpass.minblperant,
             "minsnr"        :   cfg.bandpass.minsnr,
-            "gaintable"     :   [delaycal_table,
-                                 phasecal_table],
+            "gaintable"     :   [cfg.obs.delaycal_table,
+                                 cfg.obs.phasecal_table],
             "interp"        :   cfg.bandpass.interp,
         },
         input=INPUT, output=OUTPUT,
@@ -443,8 +431,8 @@ for obs_metadata in obs_metadatas:
     # cal source that is closest to the target fields
     recipe.add("cab/casa_gaincal", "main_gain_calibration",
         {
-            "msname"       :   msfile,
-            "caltable"     :   ampcal_table,
+            "msname"       :   cfg.obs.msfile,
+            "caltable"     :   cfg.obs.ampcal_table,
             "field"        :   ",".join([str(x) for
                                         x in [bpcal_field, gaincal_field]]),
             "spw"          :   cfg.gaincal.spw,
@@ -453,9 +441,9 @@ for obs_metadata in obs_metadatas:
             "gaintype"     :   cfg.gaincal.gaintype,
             "calmode"      :   cfg.gaincal.calmode,
             "solnorm"      :   cfg.gaincal.solnorm,
-            "gaintable"    :   [delaycal_table,
-                                phasecal_table,
-                                bpasscal_table],
+            "gaintable"    :   [cfg.obs.delaycal_table,
+                                cfg.obs.phasecal_table,
+                                cfg.obs.bpasscal_table],
             "interp"       :   cfg.gaincal.interp,
         },
         input=INPUT, output=OUTPUT,
@@ -465,9 +453,9 @@ for obs_metadata in obs_metadatas:
     # bandpass calibrator (the flux scale reference)
     recipe.add("cab/casa_fluxscale", "casa_fluxscale",
         {
-            "msname"        :   msfile,
-            "caltable"      :   ampcal_table,
-            "fluxtable"     :   fluxcal_table,
+            "msname"        :   cfg.obs.msfile,
+            "caltable"      :   cfg.obs.ampcal_table,
+            "fluxtable"     :   cfg.obs.fluxcal_table,
             "reference"     :   [bandpass_cal.name],
             "transfer"      :   [gain_cal.name],
             "incremental"   :   cfg.fluxscale.incremental,
@@ -481,13 +469,13 @@ for obs_metadata in obs_metadatas:
     # the gain application to calibrators
     recipe.add("cab/casa_applycal", "apply_calibration",
         {
-            "msname"        :   msfile,
+            "msname"        :   cfg.obs.msfile,
             "field"         :   ",".join([str(x) for x in
                                     target_fields + [bpcal_field, gaincal_field]]),
-            "gaintable"     :   [delaycal_table,
-                                 phasecal_table,
-                                 bpasscal_table,
-                                 fluxcal_table],
+            "gaintable"     :   [cfg.obs.delaycal_table,
+                                 cfg.obs.phasecal_table,
+                                 cfg.obs.bpasscal_table,
+                                 cfg.obs.fluxcal_table],
             "gainfield"     :   [str(x) for x in
                                     gaincal_field,
                                     bpcal_field,
@@ -505,7 +493,7 @@ for obs_metadata in obs_metadatas:
     # Think we should make it a bit more aggressive
     recipe.add("cab/autoflagger", "auto_flag_rfi_corrected_vis",
         {
-            "msname"    : msfile,
+            "msname"    : cfg.obs.msfile,
             "column"    : cfg.autoflag_corrected_vis.column,
             "strategy"  : cfg.autoflag_corrected_vis.strategy_file,
         },
@@ -521,7 +509,7 @@ for obs_metadata in obs_metadatas:
     recipe.add("cab/politsiyakat", "flag_malfunctioning_antennas",
         {
             "task"                   : cfg.flag_baseline_phases.task,
-            "msname"                 : msfile,
+            "msname"                 : cfg.obs.msfile,
             "data_column"            : cfg.flag_baseline_phases.data_column,
             "cal_field"              : str(bpcal_field),
             "valid_phase_range"      : cfg.flag_baseline_phases.valid_phase_range,
@@ -538,7 +526,7 @@ for obs_metadata in obs_metadatas:
     # for the point source-like bandpass calibrator
     recipe.add("cab/casa_plotms", "plot_amp_v_uv_dist_of_bp_calibrator",
         {
-            "msname"            : msfile,
+            "msname"            : cfg.obs.msfile,
             "xaxis"             : cfg.plot_ampuvdist.xaxis,
             "yaxis"             : cfg.plot_ampuvdist.yaxis,
             "xdatacolumn"       : cfg.plot_ampuvdist.xdatacolumn,
@@ -550,7 +538,7 @@ for obs_metadata in obs_metadatas:
             "coloraxis"         : cfg.plot_ampuvdist.coloraxis,
             "expformat"         : cfg.plot_ampuvdist.expformat,
             "exprange"          : cfg.plot_ampuvdist.exprange,
-            "plotfile"          : basename + "_" +
+            "plotfile"          : cfg.obs.basename + "_" +
                                   plot_name[bandpass_cal.name] + "_" +
                                   "ampuvdist.png",
             "overwrite"         :   True,
@@ -561,7 +549,7 @@ for obs_metadata in obs_metadatas:
     #Diagnostic: phase vs uv dist of the bandpass calibrator
     recipe.add("cab/casa_plotms", "plot_phase_v_uv_dist_of_bp_calibrator",
         {
-            "msname"            : msfile,
+            "msname"            : cfg.obs.msfile,
             "xaxis"             : cfg.plot_phaseuvdist.xaxis,
             "yaxis"             : cfg.plot_phaseuvdist.yaxis,
             "xdatacolumn"       : cfg.plot_phaseuvdist.xdatacolumn,
@@ -573,7 +561,7 @@ for obs_metadata in obs_metadatas:
             "coloraxis"         : cfg.plot_phaseuvdist.coloraxis,
             "expformat"         : cfg.plot_phaseuvdist.expformat,
             "exprange"          : cfg.plot_phaseuvdist.exprange,
-            "plotfile"          : basename + "_" +
+            "plotfile"          : cfg.obs.basename + "_" +
                                   plot_name[bandpass_cal.name] + "_" +
                                   "phaseuvdist.png",
             "overwrite"         :   True,
@@ -584,7 +572,7 @@ for obs_metadata in obs_metadatas:
     # Diagnostic: amplitude vs phase of bp calibrator per antenna
     recipe.add("cab/casa_plotms", "plot_amp_v_phase_of_bp_calibrator",
         {
-            "msname"            : msfile,
+            "msname"            : cfg.obs.msfile,
             "xaxis"             : cfg.plot_phaseball.xaxis,
             "yaxis"             : cfg.plot_phaseball.yaxis,
             "xdatacolumn"       : cfg.plot_phaseball.xdatacolumn,
@@ -596,7 +584,7 @@ for obs_metadata in obs_metadatas:
             "coloraxis"         : cfg.plot_phaseball.coloraxis,
             "expformat"         : cfg.plot_phaseball.expformat,
             "exprange"          : cfg.plot_phaseball.exprange,
-            "plotfile"          : basename + "_" +
+            "plotfile"          : cfg.obs.basename + "_" +
                                   plot_name[bandpass_cal.name] + "_" +
                                   "phaseball.png",
             "overwrite"         :   True,
@@ -607,7 +595,7 @@ for obs_metadata in obs_metadatas:
     # Diagnostic: amplitude vs frequency of bp calibrator
     recipe.add("cab/casa_plotms", "plot_amp_v_freq_of_bp_calibrator",
         {
-            "msname"            : msfile,
+            "msname"            : cfg.obs.msfile,
             "xaxis"             : cfg.plot_amp_freq.xaxis,
             "yaxis"             : cfg.plot_amp_freq.yaxis,
             "xdatacolumn"       : cfg.plot_amp_freq.xdatacolumn,
@@ -619,7 +607,7 @@ for obs_metadata in obs_metadatas:
             "coloraxis"         : cfg.plot_amp_freq.coloraxis,
             "expformat"         : cfg.plot_amp_freq.expformat,
             "exprange"          : cfg.plot_amp_freq.exprange,
-            "plotfile"          : basename + "_" +
+            "plotfile"          : cfg.obs.basename + "_" +
                                   plot_name[bandpass_cal.name] + "_" +
                                   "band.png",
             "overwrite"         :   True,
@@ -633,7 +621,7 @@ for obs_metadata in obs_metadatas:
     # antenna positions
     recipe.add("cab/casa_plotms", "plot_phase_vs_time_of_bp_calibrator",
         {
-            "msname"            : msfile,
+            "msname"            : cfg.obs.msfile,
             "xaxis"             : cfg.plot_phase_time.xaxis,
             "yaxis"             : cfg.plot_phase_time.yaxis,
             "xdatacolumn"       : cfg.plot_phase_time.xdatacolumn,
@@ -645,7 +633,7 @@ for obs_metadata in obs_metadatas:
             "coloraxis"         : cfg.plot_phase_time.coloraxis,
             "expformat"         : cfg.plot_phase_time.expformat,
             "exprange"          : cfg.plot_phase_time.exprange,
-            "plotfile"          : basename + "_" +
+            "plotfile"          : cfg.obs.basename + "_" +
                                   plot_name[bandpass_cal.name] + "_" +
                                   "phasevtime.png",
             "overwrite"         :   True,
@@ -657,7 +645,7 @@ for obs_metadata in obs_metadatas:
     # For similar purposes as phase vs freq
     recipe.add("cab/casa_plotms", "plot_phase_vs_freq_of_bp_calibrator",
         {
-            "msname"            : msfile,
+            "msname"            : cfg.obs.msfile,
             "xaxis"             : cfg.plot_phase_freq.xaxis,
             "yaxis"             : cfg.plot_phase_freq.yaxis,
             "xdatacolumn"       : cfg.plot_phase_freq.xdatacolumn,
@@ -669,7 +657,7 @@ for obs_metadata in obs_metadatas:
             "coloraxis"         : cfg.plot_phase_freq.coloraxis,
             "expformat"         : cfg.plot_phase_freq.expformat,
             "exprange"          : cfg.plot_phase_freq.exprange,
-            "plotfile"          : basename + "_" +
+            "plotfile"          : cfg.obs.basename + "_" +
                                   plot_name[bandpass_cal.name] + "_" +
                                   "phasevfreq.png",
             "overwrite"         :   True,
@@ -691,10 +679,10 @@ for obs_metadata in obs_metadatas:
 
     # imaging
     for target_field, target in zip(target_fields, targets):
-        imname = basename + "_1GC_" + target.name
+        imname = cfg.obs.basename + "_1GC_" + target.name
         recipe.add("cab/wsclean", "wsclean_%d" % field_index[target.name],
             {
-                "msname"            : msfile,
+                "msname"            : cfg.obs.msfile,
                 "column"            : cfg.wsclean_image.column,
                 "weight"            : "briggs %.2f"%(cfg.wsclean_image.robust),
                 "npix"              : cfg.obs.im_npix,
@@ -715,7 +703,7 @@ for obs_metadata in obs_metadatas:
     # Diagnostic only: image bandpass
     recipe.add("cab/wsclean", "wsclean_bandpass",
         {
-            "msname"            : msfile,
+            "msname"            : cfg.obs.msfile,
             "column"            : cfg.wsclean_bandpass.column,
             "weight"            : "briggs %.2f"%(cfg.wsclean_bandpass.robust),
             "npix"              : cfg.obs.im_npix / 2, # don't need the full FOV
@@ -725,7 +713,7 @@ for obs_metadata in obs_metadatas:
             "channelsout"       : cfg.obs.im_numchans,
             "joinchannels"      : cfg.wsclean_bandpass.joinchannels,
             "field"             : str(bpcal_field),
-            "name"              : basename + "_bp_" + plot_name[bandpass_cal.name],
+            "name"              : cfg.obs.basename + "_bp_" + plot_name[bandpass_cal.name],
         },
         input=INPUT, output=OUTPUT,
         label="image_bandpass::wsclean")
@@ -733,7 +721,7 @@ for obs_metadata in obs_metadatas:
     # Diagnostic only: image gaincal
     recipe.add("cab/wsclean", "wsclean_gain",
         {
-            "msname"            : msfile,
+            "msname"            : cfg.obs.msfile,
             "column"            : cfg.wsclean_gain.column,
             "weight"            : "briggs %.2f"%(cfg.wsclean_gain.robust),
             "npix"              : cfg.obs.im_npix / 2, # don't need the full FOV
@@ -743,7 +731,7 @@ for obs_metadata in obs_metadatas:
             "channelsout"       : cfg.obs.im_numchans,
             "joinchannels"      : cfg.wsclean_gain.joinchannels,
             "field"             : str(gaincal_field),
-            "name"              : basename + "_gc_" + plot_name[gain_cal.name],
+            "name"              : cfg.obs.basename + "_gc_" + plot_name[gain_cal.name],
         },
         input=INPUT, output=OUTPUT,
         label="image_gain::wsclean")
@@ -787,7 +775,7 @@ for obs_metadata in obs_metadatas:
     recipe.add("cab/msutils", "msutils",
         {
             'command'    : 'prep',
-            'msname'     : msfile,
+            'msname'     : cfg.obs.msfile,
         },
         input=INPUT, output=OUTPUT,
         label="prepms::Adds flagsets")
@@ -797,7 +785,7 @@ for obs_metadata in obs_metadatas:
     recipe.add("cab/msutils", "shift_columns",
         {
             "command"           : cfg.move_corrdata_to_data.command,
-            "msname"            : msfile,
+            "msname"            : cfg.obs.msfile,
             "fromcol"           : cfg.move_corrdata_to_data.fromcol,
             "tocol"             : cfg.move_corrdata_to_data.tocol,
         },
@@ -807,9 +795,9 @@ for obs_metadata in obs_metadatas:
     # Initial selfcal loop
     for target_field, target in zip(target_fields, targets):
         # Extract sources in mfs clean image to build initial sky model
-        imname_prefix = basename + "_1GC_" + plot_name[target.name]
+        imname_prefix = cfg.obs.basename + "_1GC_" + plot_name[target.name]
         imname_mfs = imname_prefix + "-MFS-image.fits"
-        model_prefix = basename + "_LSM0_" + plot_name[target.name]
+        model_prefix = cfg.obs.basename + "_LSM0_" + plot_name[target.name]
         model_name = model_prefix + ".lsm.html"
         recipe.add("cab/pybdsm", "extract_sources_%d" % target_field,
             {
@@ -823,7 +811,7 @@ for obs_metadata in obs_metadatas:
             label="source_find_%d:: Extract sources from previous round of cal" % target_field)
 
         # Stitch wsclean channel images into a cube
-        cubename = basename + "_1GC_" + plot_name[target.name] + "-CLEAN_cube.fits"
+        cubename = cfg.obs.basename + "_1GC_" + plot_name[target.name] + "-CLEAN_cube.fits"
         recipe.add("cab/fitstool", "fitstool",
             {
                 "image"     : [ '%s-%04d-image.fits:output'%(imname_prefix, a) for a in range(cfg.obs.im_numchans) ],
@@ -854,7 +842,7 @@ for obs_metadata in obs_metadatas:
             {
                 "skymodel"  :   "%s:output"%model_name,
                 "label"     :   cfg.selfcal.label,
-                "msname"    :   msfile,
+                "msname"    :   cfg.obs.msfile,
                 "threads"   :   cfg.selfcal.ncpu,
                 "column"    :   cfg.selfcal.column,
                 "output-data"    :   cfg.selfcal.output,
@@ -874,10 +862,10 @@ for obs_metadata in obs_metadatas:
             label="SELFCAL0_%d:: Calibrate and subtract LSM0" % target_field)
 
         #make another mfs image
-        imname_prefix = basename + "_SC0_" + plot_name[target.name]
+        imname_prefix = cfg.obs.basename + "_SC0_" + plot_name[target.name]
         recipe.add("cab/wsclean", "wsclean_SC0_%d" % target_field,
             {
-                "msname"            : msfile,
+                "msname"            : cfg.obs.msfile,
                 "column"            : cfg.wsclean_selfcal.column,
                 "weight"            : "briggs %2.f"%(cfg.wsclean_selfcal.robust),
                 "npix"              : cfg.obs.im_npix,
@@ -908,14 +896,14 @@ for obs_metadata in obs_metadatas:
 
     for ti in targets:
         # Extract sources in mfs clean image to build initial sky model
-        imname_prefix = basename + "_STOKES_V_RESIDUE_" + plot_name[target.name]
+        imname_prefix = cfg.obs.basename + "_STOKES_V_RESIDUE_" + plot_name[target.name]
 
         # it  is common belief that the Unverse is free of
         # stokes V for the most part. So any structure left
         # in it is probably calibration artifacts
         recipe.add("cab/wsclean", "wsclean_stokes_v",
         {
-            "msname"            : msfile,
+            "msname"            : cfg.obs.msfile,
             "column"            : cfg.wsclean_v_residue.column,
             "weight"            : "briggs %.2f"%(cfg.wsclean_v_residue.robust),
             "npix"              : cfg.obs.im_npix,

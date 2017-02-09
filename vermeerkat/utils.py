@@ -1,4 +1,5 @@
 from collections import namedtuple, defaultdict
+import os
 
 import numpy as np
 import katdal
@@ -13,42 +14,41 @@ class ObservationProperties(object):
         for k, v in kwargs.iteritems():
             setattr(self, k, v)
 
-def merge_observation_metadata(cfg, obs_meta):
+def merge_observation_metadata(cfg, obs_metadata):
+    cfg.obs = obs = ObservationProperties()
+
+    # Configure filenames
+    obs.h5file = obs_metadata['Filename']
+    obs.basename = os.path.splitext(obs.h5file)[0]
+    obs.msfile = ''.join((obs.basename, '.ms'))
+
     #Observation properties
-    refant = str(obs_meta["RefAntenna"])
-    correlator_integration_time = obs_meta["DumpPeriod"]
-    gain_sol_int = str(correlator_integration_time * 3) + "s"
-    freq_0 = obs_meta["CenterFrequency"]
-    nchans = obs_meta["NumFreqChannels"]
-    chan_bandwidth = obs_meta["ChannelWidth"]
-    lambda_min = (299792458.0 / (freq_0 + (nchans // 2) * chan_bandwidth))
-    telescope_max_baseline = 4.2e3 # TODO: need to automate calculation of this value
-    angular_resolution = np.rad2deg(lambda_min /
-                                    telescope_max_baseline *
+    obs.refant = str(obs_metadata["RefAntenna"])
+    obs.correlator_integration_time = obs_metadata["DumpPeriod"]
+    obs.gain_sol_int = str(obs.correlator_integration_time * 3) + "s"
+    obs.freq_0 = obs_metadata["CenterFrequency"]
+    obs.nchans = obs_metadata["NumFreqChannels"]
+    obs.chan_bandwidth = obs_metadata["ChannelWidth"]
+    obs.lambda_min = (299792458.0 / (obs.freq_0 + (obs.nchans // 2) * obs.chan_bandwidth))
+    obs.telescope_max_baseline = 4.2e3 # TODO: need to automate calculation of this value
+    obs.angular_resolution = np.rad2deg(obs.lambda_min /
+                                    obs.telescope_max_baseline *
                                     1.220) * 3600 #nyquest rate in arcsecs
-    fov = cfg.general.fov * 3600 # 1 deg is good enough to cover FWHM of beam at L-Band
-    sampling = cfg.general.sampling
-    if sampling>1:
+    obs.fov = cfg.general.fov * 3600 # 1 deg is good enough to cover FWHM of beam at L-Band
+    obs.sampling = cfg.general.sampling
+    if obs.sampling>1:
         raise ValueErro('PSF sampling is > 1. Please check your config file.')
 
-    im_npix = int(fov / angular_resolution / sampling)
-    bw_per_image_slice = 100.0e6
-    im_numchans = int(np.ceil(obs_meta["ChannelWidth"] * nchans / bw_per_image_slice))
+    obs.im_npix = int(obs.fov / obs.angular_resolution / obs.sampling)
+    obs.bw_per_image_slice = 100.0e6
+    obs.im_numchans = int(np.ceil(obs_metadata["ChannelWidth"] * obs.nchans / obs.bw_per_image_slice))
 
-    cfg.obs =  ObservationProperties(refant=refant,
-        correlator_integration_time=correlator_integration_time,
-        gain_sol_int=gain_sol_int,
-        freq_0=freq_0,
-        nchans=nchans,
-        chan_bandwidth=chan_bandwidth,
-        lambda_min=lambda_min,
-        telescope_max_baseline=telescope_max_baseline,
-        angular_resolution=angular_resolution,
-        fov=fov,
-        sampling=sampling,
-        im_npix=im_npix,
-        bw_per_image_slice=bw_per_image_slice,
-        im_numchans=im_numchans)
+    # Calibrator tables
+    obs.delaycal_table = "%s.K0:output" % obs.basename
+    obs.phasecal_table = "%s.G0:output" % obs.basename
+    obs.ampcal_table = "%s.G1:output" % obs.basename
+    obs.fluxcal_table = "%s.fluxscale:output" % obs.basename
+    obs.bpasscal_table = "%s.B0:output" % obs.basename
 
 def load_scans(h5filename):
     """ Load scan info from an h5 file """
