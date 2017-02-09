@@ -6,8 +6,7 @@ import katdal
 
 import vermeerkat
 
-ScanInfo = namedtuple("ScanInfo", ["scan_index",
-    "name", "tags", "radec", "length"])
+Scan = namedtuple("Scan", ["scan_index", "name", "tags", "radec", "length"])
 
 class ObservationProperties(object):
     def __init__(self, **kwargs):
@@ -54,7 +53,7 @@ def merge_observation_metadata(cfg, obs_metadata):
 def load_scans(h5filename):
     """ Load scan info from an h5 file """
     d = katdal.open(h5filename)
-    return [ScanInfo(scan_index, target.name,
+    return [Scan(scan_index, target.name,
                         target.tags, target.radec(),
                         # timestamps changes depending on the scans
                         d.timestamps[-1] - d.timestamps[0])
@@ -70,29 +69,29 @@ def categorise_fields(scans):
     targets = []
     source_index = {}
 
-    for scan_info in scans:
+    for scan in scans:
         categorise_field = False
 
-        if scan_info.name in source_index:
+        if scan.name in source_index:
             continue
 
-        if "bpcal" in scan_info.tags:
-            bandpass_cal_candidates.append(scan_info)
+        if "bpcal" in scan.tags:
+            bandpass_cal_candidates.append(scan)
             categorise_field = True
 
-        if "gaincal" in scan_info.tags:
-            gain_cal_candidates.append(scan_info)
+        if "gaincal" in scan.tags:
+            gain_cal_candidates.append(scan)
             categorise_field = True
 
-        if "target" in scan_info.tags:
-            targets.append(scan_info)
+        if "target" in scan.tags:
+            targets.append(scan)
             categorise_field = True
 
         if not categorise_field:
             vermeerkat.log.warn("Not using observed field %s" % name)
             continue
 
-        source_index[scan_info.name] = len(source_index)
+        source_index[scan.name] = len(source_index)
 
     return source_index, bandpass_cal_candidates, gain_cal_candidates, targets
 
