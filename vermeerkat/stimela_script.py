@@ -103,8 +103,8 @@ for obs_metadata in obs_metadatas:
     # Compute observation time on bandpass calibrators
     bandpass_scan_times = vmu.total_scan_times(field_scan_map, bpcals)
     # Select the bandpass calibrator
-    bpcal_index, bandpass_cal = vmu.select_bandpass_calibrator(bpcals,
-                                                bandpass_scan_times)
+    bpcal_index, bandpass_cal, bpcal_standard = (
+        vmu.select_bandpass_calibrator(bpcals, bandpass_scan_times))
 
     # Choose the solution interval for the bandpass calibrator
     # by choosing the bandpass calibrator's minimum scan length
@@ -145,10 +145,12 @@ for obs_metadata in obs_metadatas:
                             (gain_cal.name,
                              field_index[gain_cal.name],
                              gaincal_scan_times[gaincal_index] / 60.0))
-    vermeerkat.log.info("Using '%s' (%d) as a bandpass calibrator (total "
-                "observation time: %.2f mins, minimum scan time: %.2f mins)" %
+    vermeerkat.log.info("Using '%s' (%d) in standard '%s' "
+                "as a bandpass calibrator (total observation time: %.2f mins, "
+                "minimum scan time: %.2f mins)" %
                             (bandpass_cal.name,
                              field_index[bandpass_cal.name],
+                             bpcal_standard,
                              bandpass_scan_times[bpcal_index] / 60.0,
                              bpcal_sol_int / 60.0))
     vermeerkat.log.info("Imaging the following targets: '%s' (%s)" %
@@ -283,13 +285,8 @@ for obs_metadata in obs_metadatas:
         input=INPUT, output=OUTPUT,
         label="recompute_uvw:: Recompute MeerKAT uvw coordinates")
 
-    #Run SetJY with our database of southern calibrators
-    if bandpass_cal.name in calibrator_db:
-        vermeerkat.log.warn("Looks like your flux reference '%s' is not "
-                           "in our standard. Try pulling the latest "
-                           "VermeerKAT or if you have done "
-                           "so report this issue" % bandpass_cal.name)
-
+    # Run SetJY with our database of southern calibrators
+    if bpcal_standard == "Southern":
         aghz = calibrator_db[bandpass_cal.name]["a_ghz"]
         bghz = calibrator_db[bandpass_cal.name]["b_ghz"]
         cghz = calibrator_db[bandpass_cal.name]["c_ghz"]
@@ -325,11 +322,11 @@ for obs_metadata in obs_metadatas:
             input=INPUT, output=OUTPUT,
             label="setjy:: Initial flux density scaling")
     else:
-        # If model is not in @Ben's southern calibrators, then use CASA model.
-        # If this is the case, the standard must be specified in the config file
+        # If model is not in @Ben's southern calibrators, then use the
+        # CASA model with the specified standard
         recipe.add('cab/casa_setjy', 'flux_scaling', {
             "msname"    :   cfg.obs.msfile,
-            "standard"  :   cfg.setjy_auto.standard,
+            "standard"  :   bpcal_standard,
             "field"     :   str(bpcal_field)
             },
             input=INPUT, output=OUTPUT,

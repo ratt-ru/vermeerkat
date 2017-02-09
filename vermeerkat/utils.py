@@ -1,10 +1,12 @@
-from collections import namedtuple, defaultdict
+from collections import namedtuple, defaultdict, OrderedDict
+from pprint import pformat
 import os
 
 import numpy as np
 import katdal
 
 import vermeerkat
+import vermeerkat.caltables as vmct
 
 Scan = namedtuple("Scan", ["scan_index", "name", "tags", "radec", "length"])
 
@@ -130,10 +132,45 @@ def select_gain_calibrator(targets, gaincals):
 
 def select_bandpass_calibrator(bpcals, bp_scan_totals):
     """
-    Select index and bandpass calibrator with the longest total observation time
+    Select index and bandpass calibrator from a list
     """
-    # Choose the bandpass calibrator with the longest observation time
-    index, (bpcal, length) = max(enumerate(zip(bpcals, bp_scan_totals)),
-        key=lambda (i, (bp, l)): l)
 
-    return index, bpcal
+    # See CASA setjy documentation for reasoning here
+
+    # Base for Perley-Butler 2010 and 2013
+    PERLEY_BUTLER_BASE = { "3C48",  "3C138", "3C147",
+                            "3C196", "3C286", "3C295" }
+
+    REYNOLDS_1994 = {"PKS 1934-638"}
+    # PB2013 adds PKS 1934-638
+    PERLEY_BUTLER_2010 = PERLEY_BUTLER_BASE.union(REYNOLDS_1994)
+    # PB2013 adds 3C123
+    PERLEY_BUTLER_2013 = PERLEY_BUTLER_BASE.union({"3C123"})
+    SOUTHERN = set(vmct.calibrator_database().keys())
+
+    # List of bandpass calibrators that we should prefer in order of priority.
+    # Logic here is that there are only a few bandpass calibrators
+    # See https://github.com/ska-sa/vermeerkat/issues/34
+    prioritised_bpcals = [
+        ("Perley-Butler 2013", PERLEY_BUTLER_2013),
+        ("Perley-Butler 2010", PERLEY_BUTLER_2010),
+        # Custom
+        ("Southern", SOUTHERN),
+    ]
+
+    matches = None
+
+    # Try for prioritised bandpass calibrators first
+    for priority, (standard, candidates) in enumerate(prioritised_bpcals):
+        matches = [(i, b, bp_scan_totals[i]) for i, b in enumerate(bpcals)
+                                                    if b.name in candidates]
+
+        if len(matches) > 0:
+            index, bpcal, length = max(matches, key=lambda (i, bp, l): l)
+
+            return index, bpcal, standard
+
+    raise ValueError("Unable to find a bandpass calibrator in any standard. "
+                    "Potential bandpass calibrators: '{}'. "
+                    "Supported standards:\n{}".format(
+                        bpcals, pformat(prioritised_bpcals)))
