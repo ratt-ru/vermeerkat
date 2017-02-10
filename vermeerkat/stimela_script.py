@@ -308,10 +308,10 @@ for obs_metadata in obs_metadatas:
         dghz = calibrator_db[bandpass_cal.name]["d_ghz"]
 
         # Find the brightness at reference frequency
-        I, a, b, c, d = vmcp.convert_pb_to_casaspi(
-            freq_0 / 1e9 - (nchans // 2) * chan_bandwidth / 1e9,
-            freq_0 / 1e9 + (nchans // 2) * chan_bandwidth / 1e9,
-            freq_0 / 1e9, aghz, bghz, cghz, dghz)
+        I, a, b, c, d = vmct.convert_pb_to_casaspi(
+            cfg.obs.freq_0 / 1e9 - (cfg.obs.nchans // 2) * cfg.obs.chan_bandwidth / 1e9,
+            cfg.obs.freq_0 / 1e9 + (cfg.obs.nchans // 2) * cfg.obs.chan_bandwidth / 1e9,
+            cfg.obs.freq_0 / 1e9, aghz, bghz, cghz, dghz)
 
         vermeerkat.log.info("Using bandpass calibrator %s "
                             "with brightness of %.4f Jy "
@@ -320,7 +320,7 @@ for obs_metadata in obs_metadatas:
                             "as the flux scale reference" %
                             (bandpass_cal.name,
                              I, a, b, c, d,
-                             freq_0 / 1e6))
+                             cfg.obs.freq_0 / 1e6))
         # 1GC Calibration
         recipe.add("cab/casa_setjy", "init_flux_scaling",
             {
@@ -329,7 +329,7 @@ for obs_metadata in obs_metadatas:
                 "standard"      :   cfg.setjy_manual.standard,
                 "fluxdensity"   :   I,
                 "spix"          :   [a, b, c, d],
-                "reffreq"       :   "%.2fGHz" % (freq_0 / 1e9),
+                "reffreq"       :   "%.2fGHz" % (cfg.obs.freq_0 / 1e9),
                 "usescratch"    :   cfg.setjy_manual.usescratch,
                 "scalebychan"   :   cfg.setjy_manual.scalebychan,
                 "spw"           :   cfg.setjy_manual.spw,
