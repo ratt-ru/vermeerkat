@@ -92,7 +92,7 @@ for obs_metadata in obs_metadatas:
         vermeerkat.log.info("Bandpass calibrator manually "
                             "set to '%s'. Other bandpass "
                             "calibrators will be ignored." % default_bpcal)
-        bpcals = [b for b in bpcals if not b.name == default_bpcal]
+        bpcals = [b for b in bpcals if b.name == default_bpcal]
 
     # Use nicer names for source plots
     plot_name = { s: s.replace(' ', '_') for s
