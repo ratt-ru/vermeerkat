@@ -139,7 +139,8 @@ for obs_metadata in obs_metadatas:
     sorted_fields = sorted(field_index.items(), key=lambda (k, v): v)
     vermeerkat.log.info("The following fields were observed:")
     for k, v in sorted_fields:
-        vermeerkat.log.info("\t %d: %s" % (v, k))
+        tags = set.union(*(set(s.tags) for s in field_scan_map[k]))
+        vermeerkat.log.info("\t %d: %s %s" % (v, k.ljust(20), [t for t in tags]))
 
     vermeerkat.log.info("The following targets were observed:")
 
