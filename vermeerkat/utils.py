@@ -119,22 +119,6 @@ def total_scan_times(field_scan_map, scan_targets):
     return [sum(s.length for s in field_scan_map[st.name])
                                     for st in scan_targets]
 
-def select_gain_calibrator(targets, gaincals):
-    """
-    Select index and gain calibrator closest to the mean centre
-    of the observation targets
-    """
-
-    # Compute mean target position
-    mean_target = np.mean([t.radec for t in targets], axis=0)
-
-    # Select gaincal candidate closest to mean target position
-    sqrd_dist = (mean_target - [g.radec for g in gaincals])**2
-    lmdistances = np.sum(sqrd_dist, axis=1)
-    index = np.argmin(lmdistances)
-
-    return index, gaincals[index]
-
 def select_bandpass_calibrator(bpcals, bp_scan_totals):
     """
     Select index and bandpass calibrator from a list
