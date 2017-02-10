@@ -130,7 +130,7 @@ def select_bandpass_calibrator(bpcals, bp_scan_totals):
     PERLEY_BUTLER_BASE = { "3C48",  "3C138", "3C147",
                             "3C196", "3C286", "3C295" }
 
-    REYNOLDS_1994 = {"PKS 1934-638"}
+    REYNOLDS_1994 = {"1934-638"}
     # PB2013 adds PKS 1934-638
     PERLEY_BUTLER_2010 = PERLEY_BUTLER_BASE.union(REYNOLDS_1994)
     # PB2013 adds 3C123
