@@ -45,6 +45,9 @@ def general_section_parser():
     parser.add_argument('-f', '--hdf5-file',
         help='Name of the HDF5 file to download')
 
+    parser.add_argument('-b', '--bandpass-calibrator',
+        help="Bandpass calibrator to use for simulation")
+
     return parser
 
 # Dictionary of argument parsers for particular sections
