@@ -124,6 +124,9 @@ def select_bandpass_calibrator(bpcals, bp_scan_totals):
     Select index and bandpass calibrator from a list
     """
 
+    if len(bpcals) == 0:
+        raise ValueError("Zero bandpass calibrators supplied for selection")
+
     # See CASA setjy documentation for reasoning here
 
     # Base for Perley-Butler 2010 and 2013
@@ -151,15 +154,28 @@ def select_bandpass_calibrator(bpcals, bp_scan_totals):
 
     # Try for prioritised bandpass calibrators first
     for priority, (standard, candidates) in enumerate(prioritised_bpcals):
-        matches = [(i, b, bp_scan_totals[i]) for i, b in enumerate(bpcals)
-                                                    if b.name in candidates]
+        matches = [(i, b, st) for i, (b, st)
+                    in enumerate(zip(bpcals, bp_scan_totals))
+                    if b.name in candidates]
 
         if len(matches) > 0:
-            index, bpcal, length = max(matches, key=lambda (i, bp, l): l)
+            break
 
-            return index, bpcal, standard
+    # Couldn't find anything, Southern should be last and will force
+    # the main script to try and manually set the bandpass parameters
+    # in the main script
+    if matches is None:
+        assert standard == "Southern"
+        vermeerkat.log.info("Couldn't find any of the given calibrators '{}' "
+                            "in our prioritised standards. "
+                            "Selecting candidate with "
+                            "longest observation time.".format(bpcals))
 
-    raise ValueError("Unable to find a bandpass calibrator in any standard. "
-                    "Potential bandpass calibrators: '{}'. "
-                    "Supported standards:\n{}".format(
-                        bpcals, pformat(prioritised_bpcals)))
+        matches = [(i, b, st) for i, (b, st)
+                    in enumerate(zip(bpcals, bp_scan_totals))]
+
+    # Choose bandpass with the longest observation time
+    index, bpcal, length = max(matches, key=lambda (i, bp, l): l)
+    return index, bpcal, standard
+
+
