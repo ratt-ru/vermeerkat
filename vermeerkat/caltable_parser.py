@@ -1,16 +1,15 @@
 import re
 import numpy as np
-from scipy.optimize import curve_fit
 
 def read_caltable(filename):
     """
-        Read calibrator database (specified in MHz)
-        and returns a dictionary containing the following
-        :filename: filename of caltable database
-        :returns: for every source (name = key):
-                    Epoch, RA, Declination,
-                    a_ghz, b_ghz, c_ghz, d_ghz,
-                    a_mhz, b_mhz, c_mhz, d_mhz
+    Read calibrator database (specified in MHz)
+    and returns a dictionary containing the following
+    :filename: filename of caltable database
+    :returns: for every source (name = key):
+                Epoch, RA, Declination,
+                a_ghz, b_ghz, c_ghz, d_ghz,
+                a_mhz, b_mhz, c_mhz, d_mhz
     """
     calibrator_db = {}
     with open(filename) as f:
@@ -101,32 +100,3 @@ def format_calibrator_db(calibrator_db):
         for name, db in calibrator_db.iteritems()])
 
   return '\n'.join(lines)
-
-def convert_pb_to_casaspi(vlower, vupper, v0, a, b, c, d):
-    """
-    Coverts between the different conventions:
-    PB: 10 ** [a + b * log10(v) + c * log10(v) ** 2 + d * log10(v) ** 3]
-    CASA/Meqtrees SPI: S(v0) * (v/v0) ** [a' + b'*log10(v/v0) + c'*log10(v/v0) ** 2 + d'*log10(v/v0) ** 3]
-
-    args:
-    :vlower, vupper: range (same unit as a, b, c, d coefficients!) to fit for a',b',c',d'
-    :v0: reference frequency (same unit as vlower, vupper!)
-    :a,b,c,d: PB coefficients (for the unit used in vlower, vupper and v0!)
-    """
-    if vlower > vupper:
-        raise ValueError("vlower must be lower than vupper")
-
-    def pbspi(v, a, b, c, d):
-        return 10 ** (a + b * np.log10(v) + c * np.log10(v) ** 2 + d * np.log10(v) ** 3)
-    def casaspi(v, v0, I, a, b, c, d):
-        return I * (v/v0) ** (a + b * np.log10(v/v0) + c * np.log10(v/v0) ** 2 + d * np.log10(v/v0) ** 3)
-
-    I = pbspi(v0, a, b, c, d)
-
-    v = np.linspace(vlower, vupper, 10000)
-    popt, pcov = curve_fit(lambda v, a, b, c, d: casaspi(v, v0, I, a, b, c, d), v, pbspi(v,a,b,c,d))
-    perr = np.sqrt(np.diag(pcov))
-    assert np.all(perr < 1.0e-6)
-
-    # returns (S(v0), a', b', c', d')
-    return I, popt[0], popt[1], popt[2], popt[3]

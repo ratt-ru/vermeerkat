@@ -1,10 +1,12 @@
-from collections import namedtuple, defaultdict
+from collections import namedtuple, defaultdict, OrderedDict
+from pprint import pformat
 import os
 
 import numpy as np
 import katdal
 
 import vermeerkat
+import vermeerkat.caltables as vmct
 
 Scan = namedtuple("Scan", ["scan_index", "name", "tags", "radec", "length"])
 
@@ -64,23 +66,28 @@ def categorise_fields(scans):
     """
     Categorise fields into targets, gain calibrators and bandpass calibrators
     """
-    bandpass_cal_candidates = []
-    gain_cal_candidates = []
+    bandpasses = []
+    gaincals = []
+    delaycals = []
     targets = []
-    source_index = {}
+    field_index = {}
 
     for scan in scans:
         categorise_field = False
 
-        if scan.name in source_index:
+        if scan.name in field_index:
             continue
 
+        if "delaycal" in scan.tags:
+            delaycals.append(scan)
+            categorise_field = True
+
         if "bpcal" in scan.tags:
-            bandpass_cal_candidates.append(scan)
+            bandpasses.append(scan)
             categorise_field = True
 
         if "gaincal" in scan.tags:
-            gain_cal_candidates.append(scan)
+            gaincals.append(scan)
             categorise_field = True
 
         if "target" in scan.tags:
@@ -88,12 +95,12 @@ def categorise_fields(scans):
             categorise_field = True
 
         if not categorise_field:
-            vermeerkat.log.warn("Not using observed field %s" % name)
+            vermeerkat.log.warn("Not using observed field %s" % scan.name)
             continue
 
-        source_index[scan.name] = len(source_index)
+        field_index[scan.name] = len(field_index)
 
-    return source_index, bandpass_cal_candidates, gain_cal_candidates, targets
+    return field_index, bandpasses, gaincals, delaycals, targets
 
 def create_field_scan_map(scans):
     """ Map from scan field to list of scans containing field """
@@ -112,28 +119,63 @@ def total_scan_times(field_scan_map, scan_targets):
     return [sum(s.length for s in field_scan_map[st.name])
                                     for st in scan_targets]
 
-def select_gain_calibrator(targets, gaincals):
-    """
-    Select index and gain calibrator closest to the mean centre
-    of the observation targets
-    """
-
-    # Compute mean target position
-    mean_target = np.mean([t.radec for t in targets], axis=0)
-
-    # Select gaincal candidate closest to mean target position
-    sqrd_dist = (mean_target - [g.radec for g in gaincals])**2
-    lmdistances = np.sum(sqrd_dist, axis=1)
-    index = np.argmin(lmdistances)
-
-    return index, gaincals[index]
-
 def select_bandpass_calibrator(bpcals, bp_scan_totals):
     """
-    Select index and bandpass calibrator with the longest total observation time
+    Select index and bandpass calibrator from a list
     """
-    # Choose the bandpass calibrator with the longest observation time
-    index, (bpcal, length) = max(enumerate(zip(bpcals, bp_scan_totals)),
-        key=lambda (i, (bp, l)): l)
 
-    return index, bpcal
+    if len(bpcals) == 0:
+        raise ValueError("Zero bandpass calibrators supplied for selection")
+
+    # See CASA setjy documentation for reasoning here
+
+    # Base for Perley-Butler 2010 and 2013
+    PERLEY_BUTLER_BASE = { "3C48",  "3C138", "3C147",
+                            "3C196", "3C286", "3C295" }
+
+    REYNOLDS_1994 = {"1934-638", "PKS 1934-638"}
+    # PB2013 adds PKS 1934-638
+    PERLEY_BUTLER_2010 = PERLEY_BUTLER_BASE.union(REYNOLDS_1994)
+    # PB2013 adds 3C123
+    PERLEY_BUTLER_2013 = PERLEY_BUTLER_BASE.union({"3C123"})
+    SOUTHERN = set(vmct.calibrator_database().keys())
+
+    # List of bandpass calibrators that we should prefer in order of priority.
+    # Logic here is that there are only a few bandpass calibrators
+    # See https://github.com/ska-sa/vermeerkat/issues/34
+    prioritised_bpcals = [
+        ("Perley-Butler 2013", PERLEY_BUTLER_2013),
+        ("Perley-Butler 2010", PERLEY_BUTLER_2010),
+        # Custom
+        ("Southern", SOUTHERN),
+    ]
+
+    matches = None
+
+    # Try for prioritised bandpass calibrators first
+    for priority, (standard, candidates) in enumerate(prioritised_bpcals):
+        matches = [(i, b, st) for i, (b, st)
+                    in enumerate(zip(bpcals, bp_scan_totals))
+                    if b.name in candidates]
+
+        if len(matches) > 0:
+            break
+
+    # Couldn't find anything, Southern should be last and will force
+    # the main script to try and manually set the bandpass parameters
+    # in the main script
+    if matches is None:
+        assert standard == "Southern"
+        vermeerkat.log.info("Couldn't find any of the given calibrators '{}' "
+                            "in our prioritised standards. "
+                            "Selecting candidate with "
+                            "longest observation time.".format(bpcals))
+
+        matches = [(i, b, st) for i, (b, st)
+                    in enumerate(zip(bpcals, bp_scan_totals))]
+
+    # Choose bandpass with the longest observation time
+    index, bpcal, length = max(matches, key=lambda (i, bp, l): l)
+    return index, bpcal, standard
+
+

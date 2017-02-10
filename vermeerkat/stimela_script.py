@@ -29,20 +29,11 @@ import numpy as np
 
 import stimela
 import vermeerkat
-import vermeerkat.caltable_parser as vmcp
+import vermeerkat.caltables as vmct
 import vermeerkat.config as vmc
 import vermeerkat.observation as vmo
 import vermeerkat.utils as vmu
 
-# There isn't a Southern standard in CASA
-# so construct a little database of them for reference
-vermeerkat.log.info("Parsing calibrator table")
-
-ref_table = os.path.join(vermeerkat.install_path(), "southern_calibrators.txt")
-calibrator_db = vmcp.read_caltable(ref_table)
-
-vermeerkat.log.info("Found the following reference calibrators (in GHz format):")
-vermeerkat.log.info(vmcp.format_calibrator_db(calibrator_db))
 # So that we can access GLOBALS pass through to the run command
 stimela.register_globals()
 
@@ -58,6 +49,9 @@ INPUT = cfg.general.input
 OUTPUT = cfg.general.output
 PREFIX = cfg.general.prefix
 MSDIR  = cfg.general.msdir
+
+# Get list of custom calibrators
+calibrator_db = vmct.calibrator_database()
 
 # Get a list of observations
 obs_metadatas = vmo.observation_metadatas(INPUT, cfg)
@@ -84,8 +78,21 @@ for obs_metadata in obs_metadatas:
     # Map scan target name to a list of scans associated with it
     field_scan_map = vmu.create_field_scan_map(scans)
 
-    # Categories the fields observed in each scan
-    field_index, bpcals, gaincals, targets = vmu.categorise_fields(scans)
+    # Categorise the fields observed in each scan
+    field_index, bpcals, gaincals, delaycals, targets = (
+        vmu.categorise_fields(scans))
+
+    # Alias a long name
+    default_bpcal = cfg.general.bandpass_calibrator
+
+    if default_bpcal:
+        # If a default bandpass calibrator has been specified,
+        # filter out other bandpass calibrators. We still need
+        # to extract it from the standard below
+        vermeerkat.log.info("Bandpass calibrator manually "
+                            "set to '%s'. Other bandpass "
+                            "calibrators will be ignored." % default_bpcal)
+        bpcals = [b for b in bpcals if b.name == default_bpcal]
 
     # Use nicer names for source plots
     plot_name = { s: s.replace(' ', '_') for s
@@ -101,19 +108,14 @@ for obs_metadata in obs_metadatas:
         raise RuntimeError("Observation %s does not have any "
                            "bandpass calibrators" % obs_metadata["ProductName"])
 
-    # Select a gain calibrator
-    gaincal_index, gain_cal = vmu.select_gain_calibrator(targets, gaincals)
     # Compute the observation time spent on gain calibrators
     gaincal_scan_times = vmu.total_scan_times(field_scan_map, gaincals)
-
-    # Remove gain calibrator from the bandpass calibrators
-    bpcals = [x for x in bpcals if not x.name == gain_cal.name]
 
     # Compute observation time on bandpass calibrators
     bandpass_scan_times = vmu.total_scan_times(field_scan_map, bpcals)
     # Select the bandpass calibrator
-    bpcal_index, bandpass_cal = vmu.select_bandpass_calibrator(bpcals,
-                                                bandpass_scan_times)
+    bpcal_index, bandpass_cal, bpcal_standard = (
+        vmu.select_bandpass_calibrator(bpcals, bandpass_scan_times))
 
     # Choose the solution interval for the bandpass calibrator
     # by choosing the bandpass calibrator's minimum scan length
@@ -122,9 +124,10 @@ for obs_metadata in obs_metadatas:
     # Compute observation time on target
     target_scan_times = vmu.total_scan_times(field_scan_map, targets)
 
-    # Get field ids for bandpass, gaincal and target
+    # Get field ids for bandpass, gaincals, delaycals and target
     bpcal_field = field_index[bandpass_cal.name]
-    gaincal_field = field_index[gain_cal.name]
+    gaincal_fields = [field_index[g.name] for g in gaincals]
+    delaycal_fields = [field_index[d.name] for d in delaycals]
     target_fields = [field_index[t.name] for t in targets]
 
     # Log useful information
@@ -133,7 +136,8 @@ for obs_metadata in obs_metadatas:
     sorted_fields = sorted(field_index.items(), key=lambda (k, v): v)
     vermeerkat.log.info("The following fields were observed:")
     for k, v in sorted_fields:
-        vermeerkat.log.info("\t %d: %s" % (v, k))
+        tags = set.union(*(set(s.tags) for s in field_scan_map[k]))
+        vermeerkat.log.info("\t %d: %s %s" % (v, k.ljust(20), [t for t in tags]))
 
     vermeerkat.log.info("The following targets were observed:")
 
@@ -149,15 +153,19 @@ for obs_metadata in obs_metadatas:
                                  obs_min,
                                  obs_sec))
 
-    vermeerkat.log.info("Using '%s' (%d) as a gain calibrator closest "
-                        "to target (total observation time: %.2f mins)" %
-                            (gain_cal.name,
-                             field_index[gain_cal.name],
-                             gaincal_scan_times[gaincal_index] / 60.0))
-    vermeerkat.log.info("Using '%s' (%d) as a bandpass calibrator (total "
-                "observation time: %.2f mins, minimum scan time: %.2f mins)" %
+
+    for gaincal, gc_field, gc_scan_time in zip(gaincals, gaincal_fields, gaincal_scan_times):
+        vermeerkat.log.info("Using '%s' (%d) as a gain calibrator "
+                            "(total observation time: %.2f mins)" %
+                                (gaincal.name,
+                                 gc_field,
+                                 gc_scan_time / 60.0))
+    vermeerkat.log.info("Using '%s' (%d) in standard '%s' "
+                "as a bandpass calibrator (total observation time: %.2f mins, "
+                "minimum scan time: %.2f mins)" %
                             (bandpass_cal.name,
                              field_index[bandpass_cal.name],
+                             bpcal_standard,
                              bandpass_scan_times[bpcal_index] / 60.0,
                              bpcal_sol_int / 60.0))
     vermeerkat.log.info("Imaging the following targets: '%s' (%s)" %
@@ -292,23 +300,18 @@ for obs_metadata in obs_metadatas:
         input=INPUT, output=OUTPUT,
         label="recompute_uvw:: Recompute MeerKAT uvw coordinates")
 
-    #Run SetJY with our database of southern calibrators
-    if bandpass_cal.name in calibrator_db:
-        vermeerkat.log.warn("Looks like your flux reference '%s' is not "
-                           "in our standard. Try pulling the latest "
-                           "VermeerKAT or if you have done "
-                           "so report this issue" % bandpass_cal.name)
-
+    # Run SetJY with our database of southern calibrators
+    if bpcal_standard == "Southern":
         aghz = calibrator_db[bandpass_cal.name]["a_ghz"]
         bghz = calibrator_db[bandpass_cal.name]["b_ghz"]
         cghz = calibrator_db[bandpass_cal.name]["c_ghz"]
         dghz = calibrator_db[bandpass_cal.name]["d_ghz"]
 
         # Find the brightness at reference frequency
-        I, a, b, c, d = vmcp.convert_pb_to_casaspi(
-            freq_0 / 1e9 - (nchans // 2) * chan_bandwidth / 1e9,
-            freq_0 / 1e9 + (nchans // 2) * chan_bandwidth / 1e9,
-            freq_0 / 1e9, aghz, bghz, cghz, dghz)
+        I, a, b, c, d = vmct.convert_pb_to_casaspi(
+            cfg.obs.freq_0 / 1e9 - (cfg.obs.nchans // 2) * cfg.obs.chan_bandwidth / 1e9,
+            cfg.obs.freq_0 / 1e9 + (cfg.obs.nchans // 2) * cfg.obs.chan_bandwidth / 1e9,
+            cfg.obs.freq_0 / 1e9, aghz, bghz, cghz, dghz)
 
         vermeerkat.log.info("Using bandpass calibrator %s "
                             "with brightness of %.4f Jy "
@@ -317,7 +320,7 @@ for obs_metadata in obs_metadatas:
                             "as the flux scale reference" %
                             (bandpass_cal.name,
                              I, a, b, c, d,
-                             freq_0 / 1e6))
+                             cfg.obs.freq_0 / 1e6))
         # 1GC Calibration
         recipe.add("cab/casa_setjy", "init_flux_scaling",
             {
@@ -326,7 +329,7 @@ for obs_metadata in obs_metadatas:
                 "standard"      :   cfg.setjy_manual.standard,
                 "fluxdensity"   :   I,
                 "spix"          :   [a, b, c, d],
-                "reffreq"       :   "%.2fGHz" % (freq_0 / 1e9),
+                "reffreq"       :   "%.2fGHz" % (cfg.obs.freq_0 / 1e9),
                 "usescratch"    :   cfg.setjy_manual.usescratch,
                 "scalebychan"   :   cfg.setjy_manual.scalebychan,
                 "spw"           :   cfg.setjy_manual.spw,
@@ -334,11 +337,11 @@ for obs_metadata in obs_metadatas:
             input=INPUT, output=OUTPUT,
             label="setjy:: Initial flux density scaling")
     else:
-        # If model is not in @Ben's southern calibrators, then use CASA model.
-        # If this is the case, the standard must be specified in the config file
+        # If model is not in @Ben's southern calibrators, then use the
+        # CASA model with the specified standard
         recipe.add('cab/casa_setjy', 'flux_scaling', {
             "msname"    :   cfg.obs.msfile,
-            "standard"  :   cfg.setjy_auto.standard,
+            "standard"  :   bpcal_standard,
             "field"     :   str(bpcal_field)
             },
             input=INPUT, output=OUTPUT,
@@ -349,11 +352,18 @@ for obs_metadata in obs_metadatas:
     # decorrelation on the longest baselines, so
     # better calibrate for this one (we can use the
     # bright bandpass and gain calibrator sources).
+
+    # Fields that we use to apply delaycal(include gaincal and bpcal)
+    # https://github.com/ska-sa/vermeerkat/issues/33#issuecomment-278598158
+    all_delaycal_fields = set(delaycal_fields + [bpcal_field]
+                                            + gaincal_fields)
+
     recipe.add("cab/casa_gaincal", "delay_cal",
         {
             "msname"        : cfg.obs.msfile,
-            "field"         : str(gaincal_field),
+            "field"         : ",".join([str(g) for g in gaincal_fields]),
             "gaintype"      : cfg.delaycal.gaintype,
+            "gainfield"     : [str(x) for x in all_delaycal_fields],
             "solint"        : cfg.delaycal.solint,
             "minsnr"        : cfg.delaycal.minsnr,
             "refant"        : cfg.obs.refant,
@@ -398,19 +408,19 @@ for obs_metadata in obs_metadatas:
             "minsnr"        :   cfg.bandpass.minsnr,
             "gaintable"     :   [cfg.obs.delaycal_table,
                                  cfg.obs.phasecal_table],
-            "interp"        :   cfg.bandpass.interp,
+            "interp"        :   ["linear", "linear"],
         },
         input=INPUT, output=OUTPUT,
         label="bandpass:: Bandpass calibration")
 
-    # Finally we do a second order correction on the gain
-    # cal source that is closest to the target fields
+    # Finally we do a second order correction on the
+    # bandpass and gain calibrators
     recipe.add("cab/casa_gaincal", "main_gain_calibration",
         {
             "msname"       :   cfg.obs.msfile,
             "caltable"     :   cfg.obs.ampcal_table,
-            "field"        :   ",".join([str(x) for
-                                        x in [bpcal_field, gaincal_field]]),
+            "field"        :   ",".join([str(x) for x in [bpcal_field] +
+                                                        gaincal_fields]),
             "spw"          :   cfg.gaincal.spw,
             "solint"       :   cfg.obs.gain_sol_int,
             "refant"       :   cfg.obs.refant,
@@ -420,7 +430,7 @@ for obs_metadata in obs_metadatas:
             "gaintable"    :   [cfg.obs.delaycal_table,
                                 cfg.obs.phasecal_table,
                                 cfg.obs.bpasscal_table],
-            "interp"       :   cfg.gaincal.interp,
+            "interp"       :   ["linear", "linear", "nearest"],
         },
         input=INPUT, output=OUTPUT,
         label="gaincal:: Gain calibration")
@@ -433,7 +443,7 @@ for obs_metadata in obs_metadatas:
             "caltable"      :   cfg.obs.ampcal_table,
             "fluxtable"     :   cfg.obs.fluxcal_table,
             "reference"     :   [bandpass_cal.name],
-            "transfer"      :   [gain_cal.name],
+            "transfer"      :   [g.name for g in gaincals],
             "incremental"   :   cfg.fluxscale.incremental,
         },
         input=INPUT, output=OUTPUT,
@@ -443,21 +453,18 @@ for obs_metadata in obs_metadatas:
     # the calibrators so that we can diagnose problems more
     # easily. Later steps depend on this so don't remove
     # the gain application to calibrators
+    apply_gaincal_fields = target_fields + [bpcal_field] + gaincal_fields
+
     recipe.add("cab/casa_applycal", "apply_calibration",
         {
             "msname"        :   cfg.obs.msfile,
-            "field"         :   ",".join([str(x) for x in
-                                    target_fields + [bpcal_field, gaincal_field]]),
+            "field"         :   ",".join([str(x) for x in apply_gaincal_fields]),
             "gaintable"     :   [cfg.obs.delaycal_table,
                                  cfg.obs.phasecal_table,
                                  cfg.obs.bpasscal_table,
                                  cfg.obs.fluxcal_table],
-            "gainfield"     :   [str(x) for x in
-                                    gaincal_field,
-                                    bpcal_field,
-                                    bpcal_field,
-                                    gaincal_field],
-            "interp"        :   cfg.applycal.interp,
+            "interp"        :   ["linear", "linear", "nearest", "linear"],
+            "gainfield"     :   [str(x) for x in gaincal_fields],
             "spwmap"        :   cfg.applycal.spwmap,
             "parang"        :   cfg.applycal.parang,
         },
@@ -694,23 +701,25 @@ for obs_metadata in obs_metadatas:
         input=INPUT, output=OUTPUT,
         label="image_bandpass::wsclean")
 
-    # Diagnostic only: image gaincal
-    recipe.add("cab/wsclean", "wsclean_gain",
-        {
-            "msname"            : cfg.obs.msfile,
-            "column"            : cfg.wsclean_gain.column,
-            "weight"            : "briggs %.2f"%(cfg.wsclean_gain.robust),
-            "npix"              : cfg.obs.im_npix / 2, # don't need the full FOV
-            "cellsize"          : cfg.obs.angular_resolution*cfg.obs.sampling,
-            "clean_iterations"  : cfg.wsclean_gain.clean_iterations,
-            "mgain"             : cfg.wsclean_gain.mgain,
-            "channelsout"       : cfg.obs.im_numchans,
-            "joinchannels"      : cfg.wsclean_gain.joinchannels,
-            "field"             : str(gaincal_field),
-            "name"              : cfg.obs.basename + "_gc_" + plot_name[gain_cal.name],
-        },
-        input=INPUT, output=OUTPUT,
-        label="image_gain::wsclean")
+
+    for gaincal, gaincal_field in zip(gaincals, gaincal_fields):
+        # Diagnostic only: image gaincal
+        recipe.add("cab/wsclean", "wsclean_gain_%d" % gaincal_field,
+            {
+                "msname"            : cfg.obs.msfile,
+                "column"            : cfg.wsclean_gain.column,
+                "weight"            : "briggs %.2f"%(cfg.wsclean_gain.robust),
+                "npix"              : cfg.obs.im_npix / 2, # don't need the full FOV
+                "cellsize"          : cfg.obs.angular_resolution*cfg.obs.sampling,
+                "clean_iterations"  : cfg.wsclean_gain.clean_iterations,
+                "mgain"             : cfg.wsclean_gain.mgain,
+                "channelsout"       : cfg.obs.im_numchans,
+                "joinchannels"      : cfg.wsclean_gain.joinchannels,
+                "field"             : str(gaincal_field),
+                "name"              : cfg.obs.basename + "_gc_" + plot_name[gaincal.name],
+            },
+            input=INPUT, output=OUTPUT,
+            label="image_gain::wsclean")
 
     # Add Flagging and 1GC steps
     onegcsteps = [
