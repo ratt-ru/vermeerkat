@@ -27,6 +27,12 @@ Download and image a specific observation file, using a custom configuration fil
 
     vermeerkat -f 123456789.h5 -c myconfig.conf
 
+The latest version of the pipeline is depicted here. Unimplemented steps are shown in red:
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. figure:: https://github.com/ska-sa/vermeerkat/blob/master/misc/Vermeerkat_flow.png
+   :alt: Pipeline
+
 The Astronomer, by Vermeer
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -36,8 +42,3 @@ The Astronomer, by Vermeer
     :height: 500px
     :align: center
 
-The latest version of the pipeline is depicted here. Unimplemented steps are shown in red:
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. figure:: https://github.com/ska-sa/vermeerkat/blob/master/misc/Vermeerkat_flow.png
-   :alt: Pipeline
