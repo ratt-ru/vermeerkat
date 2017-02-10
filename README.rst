@@ -3,29 +3,93 @@ VerMeerKAT
 
 RATT/RARG MeerKAT continuum self-calibration pipeline.
 
+Source Repository
+-----------------
+
+VerMeerKAT is available at `<https://github.com/ska-sa/vermeerkat>`_.
+
+Installation
+------------
+
+Clone VerMeerKAT from github and install it in a virtual environment:
+
+.. code:: bash
+
+    $ cd /src
+    $ git clone git@github.com:ska-sa/vermeerkat.git
+    $ virtualenv ~/venv/vermeerkat
+    $ source ~/venv/vermeerkat/bin/activate
+    (vermeerkat) $ pip install /src/vermeerkat
+
+VerMeerKAT depends on stimela_, which uses radio astronomy packages
+installed in docker containers to perform a reduction.
+The containers must built and installed.
+Note that this step will involve downloading GB of docker images.
+
+.. code:: bash
+
+    (vermeerkat) $ stimela build
+
 Usage
 -----
+
+In general, it is necessary for VerMeerKAT to access the SDP pysolr server
+in order to query the latest observations and obtain the location of
+observation hdf5 files for download.
+As such it initially needs to run within the SKA SA network.
+Once the observation metadata and the hdf5 file have been downloaded,
+it is possible to rerun VerMeerKAT on an observation in an ``offline mode``
+without access to these servers.
+This mode requires specifying the specific observation file, as mentioned
+in the use case below.
+
+Initial setup
+~~~~~~~~~~~~~
+
+Make a directory in which you wish to perform your reduction and copy the default
+configuration file into the ``input`` subdirectory.
+
+.. code:: bash
+
+    (vermeerkat) $ mkdir -p ~/pipelines/input
+    (vermeerkat) $ cd ~/pipelines
+    (vermeerkat) $ cp /src/vermeerkat/vermeerkat/conf/default.conf myconfig.conf
+
+At present, three files referenced in ``myconfig.conf`` need to be present in the ``input`` folder
+
+* A MeerKAT 4096 channel rfi mask. (``rfi_mask.pickle``)
+* A firstpass aoflagger flagging strategy file (``29Dec2016_firstpass_strategy.rfis``)
+* A secondpass aoflagger flagging strategy file (``06Jan2017_secondpass_strategy.rfis``)
+
+Configuration File
+~~~~~~~~~~~~~~~~~~
+
+``default.conf`` is a YAML file containing many options for configuring
+the various tasks within the pipeline.
+Many of them correspond to options for the CASA tasks that they call.
+As they are legion, they are not documented here, and you should have a
+familiarity with CASA when modifying them.
 
 Download and image observations in the last 3 days
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code:: bash
 
-    vermeerkat
+    (vermeerkat) $ vermeerkat
 
 Specify a different configuration file
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code:: bash
 
-    vermeerkat -c myconfig.conf
+    (vermeerkat) $ vermeerkat -c myconfig.conf
 
 Download and image a specific observation file, using a custom configuration file
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code:: bash
 
-    vermeerkat -f 123456789.h5 -c myconfig.conf
+    (vermeerkat) $ vermeerkat -f 123456789.h5 -c myconfig.conf
 
 The latest version of the pipeline is depicted here. Unimplemented steps are shown in red:
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -42,3 +106,5 @@ The Astronomer, by Vermeer
     :height: 500px
     :align: center
 
+.. _stimela: https://github.com/SpheMakh/Stimela
+.. _vermeerkat: https://github.com/ska-sa/vermeerkat
