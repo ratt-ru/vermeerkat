@@ -91,6 +91,17 @@ Download and image a specific observation file, using a custom configuration fil
 
     (vermeerkat) $ vermeerkat -f 123456789.h5 -c myconfig.conf
 
+Use a specific bandpass calibrator
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Often, it is useful to pick a specific bandpass calibration for calibrating
+the flux present in the observation. This can be specified on the command line:
+
+.. code:: bash
+
+    (vermeerkat) $ vermeerkat -f 123456789.h5 -c myconfig.conf -b 1934-638
+
+
 The latest version of the pipeline is depicted here. Unimplemented steps are shown in red:
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
