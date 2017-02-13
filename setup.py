@@ -55,7 +55,7 @@ setup(name=PACKAGE_NAME,
     version=get_version(),
     description='MeerKAT Imaging Pipeline',
     long_description=readme(),
-    url='http://github.com/SpheMakh/VerMeerKAT',
+    url='http://github.com/ska-sa/vermeerkat',
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Developers",
