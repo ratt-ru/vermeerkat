@@ -37,12 +37,8 @@ import vermeerkat.utils as vmu
 # So that we can access GLOBALS pass through to the run command
 stimela.register_globals()
 
-# args is a global string variable representing a python list of strings
-# Evaluate it to get the list of strings back
-args = ast.literal_eval(args)
-
 # Load in the configuration
-cfg = vmc.configuration(args)
+cfg = vmc.configuration(vmc.retrieve_args())
 # Register directories
 
 INPUT = cfg.general.input

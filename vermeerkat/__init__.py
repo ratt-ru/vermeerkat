@@ -22,6 +22,7 @@ import logging
 import os
 
 import vermeerkat
+import vermeerkat.config as vmc
 
 from version import __version__
 
@@ -56,6 +57,11 @@ def run(args):
     """ Execute the program """
     import stimela
 
+    # Store command line arguments for later retrieval
+    # This avoids contortions required to pass
+    # them through stimela.run
+    vmc.store_args(args)
+
     def _create_stimela_dirs():
         # Create stimela input and output directories
         for path in ('input', 'output', 'msdir'):
@@ -73,11 +79,5 @@ def run(args):
 
     stimela_dirs = { p: f for p, f in _create_stimela_dirs() }
 
-    # Convert argument list to a string, replacing any single-quotes
-    # with double-quotes to get past stimela's
-    # global variable evaluation logic
-    str_args = str(args).replace("'", '"')
-
     # Execute the stimela script
-    stimela.run(['-g', 'args={}:str'.format(str_args),
-        __stimela_script_path])
+    stimela.run([__stimela_script_path])

@@ -27,6 +27,28 @@ import ruamel.yaml
 
 import vermeerkat
 
+__ARGS = None
+
+def store_args(args):
+    """ Store arguments for later retrieval """
+    global __ARGS
+
+    if __ARGS is not None:
+        vermeerkat.log.warn("Replacing existing stored arguments '{}'"
+                            "with '{}'.", __ARGS, args)
+
+    __ARGS = args
+
+def retrieve_args():
+    """ Retrieve stored arguments """
+    global __ARGS
+
+    if __ARGS is None:
+        raise ValueError("No arguments were stored. "
+                        "Please call store_args first.")
+
+    return __ARGS
+
 def is_valid_file(parser, arg):
     if not os.path.exists(arg):
         parser.error("The file '%s' does not exist!" % arg)
@@ -46,7 +68,7 @@ def general_section_parser():
         help='Name of the HDF5 file to download')
 
     parser.add_argument('-b', '--bandpass-calibrator',
-        help="Bandpass calibrator to use for simulation")
+        help="Bandpass calibrator to use for imaging")
 
     return parser
 
