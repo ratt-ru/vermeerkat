@@ -68,7 +68,10 @@ def general_section_parser():
         help='Name of the HDF5 file to download')
 
     parser.add_argument('-b', '--bandpass-calibrator',
-        help="Bandpass calibrator to use for imaging")
+        help="Imaging bandpass calibrator")
+
+    parser.add_argument('-g', '--gain-calibrator',
+        help="Imaging gain calibrator ")
 
     return parser
 
