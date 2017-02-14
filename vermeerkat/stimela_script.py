@@ -77,6 +77,16 @@ for obs_metadata in obs_metadatas:
     # Categories the fields observed in each scan
     field_index, bpcals, gaincals, targets = vmu.categorise_fields(scans)
 
+    # Log useful information
+    vermeerkat.log.info("The following fields were observed:")
+
+    # Sort fields by index
+    for k, v in sorted(field_index.items(), key=lambda (k, v): v):
+        tags = set.union(*(set(s.tags) for s in field_scan_map[k]))
+        scan_seconds = sum(s.length for s in field_scan_map[k])
+        vermeerkat.log.info("\t %d: %s %s %s" % (v, k.ljust(20),
+                    vmu.fmt_seconds(scan_seconds).ljust(20),
+                    [t for t in tags]))
 
     # Use nicer names for source plots
     plot_name = { s: s.replace(' ', '_') for s
@@ -115,17 +125,6 @@ for obs_metadata in obs_metadatas:
     bpcal_field = field_index[bandpass_cal.name]
     gaincal_field = field_index[gain_cal.name]
     target_fields = [field_index[t.name] for t in targets]
-
-    # Log useful information
-    vermeerkat.log.info("The following fields were observed:")
-
-    # Sort fields by index
-    for k, v in sorted(field_index.items(), key=lambda (k, v): v):
-        tags = set.union(*(set(s.tags) for s in field_scan_map[k]))
-        scan_seconds = sum(s.length for s in field_scan_map[k])
-        vermeerkat.log.info("\t %d: %s %s %s" % (v, k.ljust(20),
-                    vmu.fmt_seconds(scan_seconds).ljust(20),
-                    [t for t in tags]))
 
     vermeerkat.log.info("The following targets were observed:")
 
