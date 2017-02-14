@@ -77,29 +77,31 @@ Download and image observations in the last 3 days
 
     (vermeerkat) $ vermeerkat
 
-Specify a different configuration file
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Specify a user configuration file
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code:: bash
 
     (vermeerkat) $ vermeerkat -c myconfig.conf
 
-Download and image a specific observation file, using a custom configuration file
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Download and image a specific observation file, as well as a custom configuration file
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code:: bash
 
     (vermeerkat) $ vermeerkat -f 123456789.h5 -c myconfig.conf
 
-Use a specific bandpass calibrator
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Other useful command line options
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Often, it is useful to pick a specific bandpass calibration for calibrating
-the flux present in the observation. This can be specified on the command line:
 
-.. code:: bash
+-b, --bandpass-calibrator   Manually set the bandpass calibrator used
+                            used to estimate the flux present in the observation.
 
-    (vermeerkat) $ vermeerkat -f 123456789.h5 -c myconfig.conf -b 1934-638
+-g, --gain-calibrator       Manually specify the gain calibrator for estimating the
+                            gains during the observation.
+
+
 
 
 The latest version of the pipeline is depicted here. Unimplemented steps are shown in red:
