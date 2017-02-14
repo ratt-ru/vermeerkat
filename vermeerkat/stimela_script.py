@@ -134,39 +134,35 @@ for obs_metadata in obs_metadatas:
     target_fields = [field_index[t.name] for t in targets]
 
     # Log useful information
+    vermeerkat.log.info("The following fields were observed:")
 
     # Sort fields by index
-    sorted_fields = sorted(field_index.items(), key=lambda (k, v): v)
-    vermeerkat.log.info("The following fields were observed:")
-    for k, v in sorted_fields:
+    for k, v in sorted(field_index.items(), key=lambda (k, v): v):
         tags = set.union(*(set(s.tags) for s in field_scan_map[k]))
-        vermeerkat.log.info("\t %d: %s %s" % (v, k.ljust(20), [t for t in tags]))
+        scan_seconds = sum(s.length for s in field_scan_map[k])
+        vermeerkat.log.info("\t %d: %s %s %s" % (v, k.ljust(20),
+                    vmu.fmt_seconds(scan_seconds).ljust(20),
+                    [t for t in tags]))
 
     vermeerkat.log.info("The following targets were observed:")
 
     for target, target_scan_time in zip(targets, target_scan_times):
-        obs_hr = int(np.floor(target_scan_time / 3600.0))
-        obs_min = int(np.floor((target_scan_time - obs_hr * 3600.0) / 60.0))
-        obs_sec = target_scan_time - obs_hr * 3600.0 - obs_min * 60.0
-        vermeerkat.log.info("\t %s (%d) - total observation time "
-                            "%d h %d mins %.2f secs" %
+        vermeerkat.log.info("\t %s (%d) - total observation time %s." %
                                 (target.name,
                                  field_index[target.name],
-                                 obs_hr,
-                                 obs_min,
-                                 obs_sec))
+                                 vmu.fmt_seconds(scan_seconds)))
 
-    vermeerkat.log.info("Using '%s' (%d) as a gain calibrator closest "
-                        "to target (total observation time: %.2f mins)" %
+    vermeerkat.log.info("Using '%s' (%d) as a gain calibrator "
+                        "(total observation time: %s)" %
                             (gain_cal.name,
                              field_index[gain_cal.name],
-                             gaincal_scan_times[gaincal_index] / 60.0))
+                             vmu.fmt_seconds(scan_seconds)))
     vermeerkat.log.info("Using '%s' (%d) as a bandpass calibrator (total "
-                "observation time: %.2f mins, minimum scan time: %.2f mins)" %
+                "observation time: %s, minimum scan time: %s)" %
                             (bandpass_cal.name,
                              field_index[bandpass_cal.name],
-                             bandpass_scan_times[bpcal_index] / 60.0,
-                             bpcal_sol_int / 60.0))
+                             vmu.fmt_seconds(bandpass_scan_times[bpcal_index]),
+                             vmu.fmt_seconds(bpcal_sol_int)))
     vermeerkat.log.info("Imaging the following targets: '%s' (%s)" %
                             (",".join([t.name for t in targets]),
                              ",".join([str(field_index[t.name]) for t in targets])))

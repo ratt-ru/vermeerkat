@@ -1,3 +1,4 @@
+import datetime
 from collections import namedtuple, defaultdict
 import os
 
@@ -59,6 +60,14 @@ def load_scans(h5filename):
                         d.timestamps[-1] - d.timestamps[0])
              for (scan_index, state, target) in d.scans()
              if state == "track"]
+
+def fmt_seconds(seconds, format=None):
+    """ Formats seconds into %Hh%Mm%Ss format """
+
+    if format is None:
+        format = '%Hh%Mm%Ss'
+
+    return datetime.datetime.utcfromtimestamp(seconds).strftime(format)
 
 def categorise_fields(scans):
     """
