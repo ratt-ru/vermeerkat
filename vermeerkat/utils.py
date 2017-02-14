@@ -121,11 +121,29 @@ def total_scan_times(field_scan_map, scan_targets):
     return [sum(s.length for s in field_scan_map[st.name])
                                     for st in scan_targets]
 
-def select_gain_calibrator(targets, gaincals):
+def select_gain_calibrator(cfg, targets, gaincals):
     """
     Select index and gain calibrator closest to the mean centre
     of the observation targets
     """
+
+    default_gaincal = cfg.general.gain_calibrator
+
+    if default_gaincal:
+        # If a default gain calibrator has been specified,
+        # filter out other gain calibrators.
+        vermeerkat.log.info("Gain calibrator manually "
+                            "set to '%s'." % default_gaincal)
+
+        gaincal_names = [g.name for g in gaincals]
+
+        try:
+            index = gaincal_names.index(default_gaincal)
+            return index, gaincals[index]
+        except ValueError:
+            raise ValueError("'%s' not in list of "
+                            "gain calibrators '%s'" % (
+                                default_gaincal, gaincal_names))
 
     # Compute mean target position
     mean_target = np.mean([t.radec for t in targets], axis=0)
@@ -137,11 +155,31 @@ def select_gain_calibrator(targets, gaincals):
 
     return index, gaincals[index]
 
-def select_bandpass_calibrator(bpcals, bp_scan_totals):
+def select_bandpass_calibrator(cfg, bpcals, bp_scan_totals):
     """
     Select index and bandpass calibrator with the longest total observation time
     """
     # Choose the bandpass calibrator with the longest observation time
+
+    default_bpcal = cfg.general.bandpass_calibrator
+
+    if default_bpcal:
+        # If a default gain calibrator has been specified,
+        # filter out other gain calibrators.
+        vermeerkat.log.info("Bandpass calibrator manually "
+                            "set to '%s'." % default_bpcal)
+
+        bpcal_names = [g.name for g in bpcals]
+
+        try:
+            index = bpcal_names.index(default_bpcal)
+            return index, bpcals[index]
+        except ValueError:
+            raise ValueError("'%s' not in list of "
+                            "bandpass calibrators '%s'" % (
+                                default_bpcal, bpcal_names))
+
+
     index, (bpcal, length) = max(enumerate(zip(bpcals, bp_scan_totals)),
         key=lambda (i, (bp, l)): l)
 

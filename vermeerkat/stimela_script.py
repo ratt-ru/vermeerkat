@@ -77,17 +77,6 @@ for obs_metadata in obs_metadatas:
     # Categories the fields observed in each scan
     field_index, bpcals, gaincals, targets = vmu.categorise_fields(scans)
 
-    # Alias a long name
-    default_bpcal = cfg.general.bandpass_calibrator
-
-    if default_bpcal:
-        # If a default bandpass calibrator has been specified,
-        # filter out other bandpass calibrators. We still need
-        # to extract it from the standard below
-        vermeerkat.log.info("Bandpass calibrator manually "
-                            "set to '%s'. Other bandpass "
-                            "calibrators will be ignored." % default_bpcal)
-        bpcals = [b for b in bpcals if b.name == default_bpcal]
 
     # Use nicer names for source plots
     plot_name = { s: s.replace(' ', '_') for s
@@ -104,15 +93,16 @@ for obs_metadata in obs_metadatas:
                            "bandpass calibrators" % obs_metadata["ProductName"])
 
     # Select a gain calibrator
-    gaincal_index, gain_cal = vmu.select_gain_calibrator(targets, gaincals)
+    gaincal_index, gain_cal = vmu.select_gain_calibrator(cfg, targets,
+                                                                gaincals)
     # Compute the observation time spent on gain calibrators
     gaincal_scan_times = vmu.total_scan_times(field_scan_map, gaincals)
 
     # Compute observation time on bandpass calibrators
     bandpass_scan_times = vmu.total_scan_times(field_scan_map, bpcals)
     # Select the bandpass calibrator
-    bpcal_index, bandpass_cal = vmu.select_bandpass_calibrator(bpcals,
-                                                bandpass_scan_times)
+    bpcal_index, bandpass_cal = vmu.select_bandpass_calibrator(cfg,
+                                        bpcals, bandpass_scan_times)
 
     # Choose the solution interval for the bandpass calibrator
     # by choosing the bandpass calibrator's minimum scan length
