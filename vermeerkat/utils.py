@@ -1,13 +1,11 @@
 import datetime
-from collections import namedtuple, defaultdict
+from collections import defaultdict
 import os
 
 import numpy as np
 import katdal
 
 import vermeerkat
-
-Scan = namedtuple("Scan", ["scan_index", "name", "tags", "radec", "length"])
 
 class ObservationProperties(object):
     def __init__(self, **kwargs):
@@ -54,12 +52,15 @@ def merge_observation_metadata(cfg, obs_metadata):
 def load_scans(h5filename):
     """ Load scan info from an h5 file """
     d = katdal.open(h5filename)
-    return [Scan(scan_index, target.name,
-                        target.tags, target.radec(),
-                        # timestamps changes depending on the scans
-                        d.timestamps[-1] - d.timestamps[0])
-             for (scan_index, state, target) in d.scans()
-             if state == "track"]
+
+    def _modify_target(target, scan_index, scan_length):
+        target.scan_index = scan_index
+        target.scan_length = scan_length
+        return target
+
+    return [_modify_target(target, scan_index, d.timestamps[-1] - d.timestamps[0])
+                                    for (scan_index, state, target) in d.scans()
+                                    if state == "track"]
 
 def fmt_seconds(seconds, format=None):
     """ Formats seconds into %Hh%Mm%Ss format """
@@ -118,7 +119,7 @@ def total_scan_times(field_scan_map, scan_targets):
     Return a list of total_scan_times
     for each target in scan_targets
     """
-    return [sum(s.length for s in field_scan_map[st.name])
+    return [sum(s.scan_length for s in field_scan_map[st.name])
                                     for st in scan_targets]
 
 def select_gain_calibrator(cfg, targets, gaincals):
@@ -146,10 +147,10 @@ def select_gain_calibrator(cfg, targets, gaincals):
                                 default_gaincal, gaincal_names))
 
     # Compute mean target position
-    mean_target = np.mean([t.radec for t in targets], axis=0)
+    mean_target = np.mean([t.radec() for t in targets], axis=0)
 
     # Select gaincal candidate closest to mean target position
-    sqrd_dist = (mean_target - [g.radec for g in gaincals])**2
+    sqrd_dist = (mean_target - [g.radec() for g in gaincals])**2
     lmdistances = np.sum(sqrd_dist, axis=1)
     index = np.argmin(lmdistances)
 
