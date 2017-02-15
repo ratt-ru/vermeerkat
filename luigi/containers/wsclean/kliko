@@ -1,0 +1,41 @@
+#!/usr/bin/env python
+"""
+This is the simulator file. Is is ment to be called from
+inside a kliko container. 
+"""
+
+from __future__ import print_function
+import os
+import subprocess
+from glob import glob
+import sys
+from itertools import chain
+from kliko.validate import validate
+import kliko
+
+
+binary = "/usr/bin/wsclean"
+
+# validate and parse the kliko arguments
+parameters = validate()
+
+parameters['datacolumn'] = 'DATA'
+
+# build list of input files
+pattern = parameters.pop('pattern')
+ms_files = glob(os.path.join(kliko.work_path, pattern))
+
+# format the arguments
+args = list(chain(*[["-" + k, v] for k, v in parameters.items() if v]))
+
+# combine
+cmd = [binary] + args + ms_files
+
+if ms_files:
+    # call
+    print("running: {} ".format(cmd))
+    error = subprocess.call(cmd)
+    sys.exit(error)
+else:
+    print("pattern {} doesn't match any input files!".format(pattern), file=sys.stderr)
+    sys.exit(1)

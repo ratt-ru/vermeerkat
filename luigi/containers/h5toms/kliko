@@ -1,0 +1,41 @@
+#!/usr/bin/env python
+"""
+This is th eh5toms kliko file. Is is ment to be called from
+inside a kliko container.
+"""
+from __future__ import print_function
+import os
+import sys
+from glob import glob
+from kliko.validate import validate
+import kliko
+import subprocess
+
+binary = "/usr/bin/h5toms.py"
+
+# validate and parse the kliko arguments
+parameters = validate()
+
+# build list of input files
+pattern = parameters.pop('pattern')
+h5_files = glob(os.path.join(kliko.input_path, pattern))
+
+prefix = parameters.pop('prefix')
+parameters['output-ms'] = kliko.output_path + '/' + prefix + '.ms'
+
+# format the arguments
+args = ["--{}={}".format(k, v) for k, v in parameters.items() if v]
+
+# combine
+cmd = [binary] + args + h5_files
+
+if h5_files:
+    # call
+    print("running: ".format(cmd))
+    error = subprocess.call(cmd)
+    sys.exit(error)
+else:
+    print("pattern {} doesn't match any input files!".format(pattern), file=sys.stderr)
+    sys.exit(1)
+
+

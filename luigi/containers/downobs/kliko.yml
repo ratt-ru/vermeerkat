@@ -1,0 +1,21 @@
+schema_version: 3
+name: vermeerkat/downobs
+description: Downloads a observation
+url: https://github.com/ska-sa/vermeerkat
+io: split
+
+sections:
+  -
+    name: parameters
+    description: downobs parameters
+    fields:
+      -
+        name: url
+        type: str
+        required: true
+        help_text: URL pointing at the hdf5 file containing the observation
+      -
+        name: filename
+        type: str
+        required: false
+
