@@ -83,7 +83,7 @@ for obs_metadata in obs_metadatas:
     # Sort fields by index
     for k, v in sorted(field_index.items(), key=lambda (k, v): v):
         tags = set.union(*(set(s.tags) for s in field_scan_map[k]))
-        scan_seconds = sum(s.length for s in field_scan_map[k])
+        scan_seconds = sum(s.scan_length for s in field_scan_map[k])
         vermeerkat.log.info("\t %d: %s %s %s" % (v, k.ljust(20),
                     vmu.fmt_seconds(scan_seconds).ljust(20),
                     [t for t in tags]))
@@ -116,7 +116,7 @@ for obs_metadata in obs_metadatas:
 
     # Choose the solution interval for the bandpass calibrator
     # by choosing the bandpass calibrator's minimum scan length
-    bpcal_sol_int = min(s.length for s in field_scan_map[bandpass_cal.name])
+    bpcal_sol_int = min(s.scan_length for s in field_scan_map[bandpass_cal.name])
 
     # Compute observation time on target
     target_scan_times = vmu.total_scan_times(field_scan_map, targets)
