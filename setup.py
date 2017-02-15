@@ -48,7 +48,7 @@ def get_version():
     return version_git
 
 def readme():
-    with open('README.md') as f:
+    with open('README.rst') as f:
         return f.read()
 
 setup(name=PACKAGE_NAME,

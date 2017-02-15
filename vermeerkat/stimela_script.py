@@ -29,35 +29,25 @@ import numpy as np
 
 import stimela
 import vermeerkat
-import vermeerkat.caltable_parser as vmcp
+import vermeerkat.caltables as vmct
 import vermeerkat.config as vmc
 import vermeerkat.observation as vmo
 import vermeerkat.utils as vmu
 
-# There isn't a Southern standard in CASA
-# so construct a little database of them for reference
-vermeerkat.log.info("Parsing calibrator table")
-
-ref_table = os.path.join(vermeerkat.install_path(), "southern_calibrators.txt")
-calibrator_db = vmcp.read_caltable(ref_table)
-
-vermeerkat.log.info("Found the following reference calibrators (in GHz format):")
-vermeerkat.log.info(vmcp.format_calibrator_db(calibrator_db))
 # So that we can access GLOBALS pass through to the run command
 stimela.register_globals()
 
-# args is a global string variable representing a python list of strings
-# Evaluate it to get the list of strings back
-args = ast.literal_eval(args)
-
 # Load in the configuration
-cfg = vmc.configuration(args)
+cfg = vmc.configuration(vmc.retrieve_args())
 # Register directories
 
 INPUT = cfg.general.input
 OUTPUT = cfg.general.output
 PREFIX = cfg.general.prefix
 MSDIR  = cfg.general.msdir
+
+# Get list of custom calibrators
+calibrator_db = vmct.calibrator_database()
 
 # Get a list of observations
 obs_metadatas = vmo.observation_metadatas(INPUT, cfg)
@@ -87,6 +77,17 @@ for obs_metadata in obs_metadatas:
     # Categories the fields observed in each scan
     field_index, bpcals, gaincals, targets = vmu.categorise_fields(scans)
 
+    # Log useful information
+    vermeerkat.log.info("The following fields were observed:")
+
+    # Sort fields by index
+    for k, v in sorted(field_index.items(), key=lambda (k, v): v):
+        tags = set.union(*(set(s.tags) for s in field_scan_map[k]))
+        scan_seconds = sum(s.length for s in field_scan_map[k])
+        vermeerkat.log.info("\t %d: %s %s %s" % (v, k.ljust(20),
+                    vmu.fmt_seconds(scan_seconds).ljust(20),
+                    [t for t in tags]))
+
     # Use nicer names for source plots
     plot_name = { s: s.replace(' ', '_') for s
                                     in field_index.keys() }
@@ -102,18 +103,16 @@ for obs_metadata in obs_metadatas:
                            "bandpass calibrators" % obs_metadata["ProductName"])
 
     # Select a gain calibrator
-    gaincal_index, gain_cal = vmu.select_gain_calibrator(targets, gaincals)
+    gaincal_index, gain_cal = vmu.select_gain_calibrator(cfg, targets,
+                                                                gaincals)
     # Compute the observation time spent on gain calibrators
     gaincal_scan_times = vmu.total_scan_times(field_scan_map, gaincals)
-
-    # Remove gain calibrator from the bandpass calibrators
-    bpcals = [x for x in bpcals if not x.name == gain_cal.name]
 
     # Compute observation time on bandpass calibrators
     bandpass_scan_times = vmu.total_scan_times(field_scan_map, bpcals)
     # Select the bandpass calibrator
-    bpcal_index, bandpass_cal = vmu.select_bandpass_calibrator(bpcals,
-                                                bandpass_scan_times)
+    bpcal_index, bandpass_cal = vmu.select_bandpass_calibrator(cfg,
+                                        bpcals, bandpass_scan_times)
 
     # Choose the solution interval for the bandpass calibrator
     # by choosing the bandpass calibrator's minimum scan length
@@ -127,39 +126,25 @@ for obs_metadata in obs_metadatas:
     gaincal_field = field_index[gain_cal.name]
     target_fields = [field_index[t.name] for t in targets]
 
-    # Log useful information
-
-    # Sort fields by index
-    sorted_fields = sorted(field_index.items(), key=lambda (k, v): v)
-    vermeerkat.log.info("The following fields were observed:")
-    for k, v in sorted_fields:
-        vermeerkat.log.info("\t %d: %s" % (v, k))
-
     vermeerkat.log.info("The following targets were observed:")
 
     for target, target_scan_time in zip(targets, target_scan_times):
-        obs_hr = int(np.floor(target_scan_time / 3600.0))
-        obs_min = int(np.floor((target_scan_time - obs_hr * 3600.0) / 60.0))
-        obs_sec = target_scan_time - obs_hr * 3600.0 - obs_min * 60.0
-        vermeerkat.log.info("\t %s (%d) - total observation time "
-                            "%d h %d mins %.2f secs" %
+        vermeerkat.log.info("\t %s (%d) - total observation time %s." %
                                 (target.name,
                                  field_index[target.name],
-                                 obs_hr,
-                                 obs_min,
-                                 obs_sec))
+                                 vmu.fmt_seconds(scan_seconds)))
 
-    vermeerkat.log.info("Using '%s' (%d) as a gain calibrator closest "
-                        "to target (total observation time: %.2f mins)" %
+    vermeerkat.log.info("Using '%s' (%d) as a gain calibrator "
+                        "(total observation time: %s)" %
                             (gain_cal.name,
                              field_index[gain_cal.name],
-                             gaincal_scan_times[gaincal_index] / 60.0))
+                             vmu.fmt_seconds(scan_seconds)))
     vermeerkat.log.info("Using '%s' (%d) as a bandpass calibrator (total "
-                "observation time: %.2f mins, minimum scan time: %.2f mins)" %
+                "observation time: %s, minimum scan time: %s)" %
                             (bandpass_cal.name,
                              field_index[bandpass_cal.name],
-                             bandpass_scan_times[bpcal_index] / 60.0,
-                             bpcal_sol_int / 60.0))
+                             vmu.fmt_seconds(bandpass_scan_times[bpcal_index]),
+                             vmu.fmt_seconds(bpcal_sol_int)))
     vermeerkat.log.info("Imaging the following targets: '%s' (%s)" %
                             (",".join([t.name for t in targets]),
                              ",".join([str(field_index[t.name]) for t in targets])))
@@ -305,10 +290,10 @@ for obs_metadata in obs_metadatas:
         dghz = calibrator_db[bandpass_cal.name]["d_ghz"]
 
         # Find the brightness at reference frequency
-        I, a, b, c, d = vmcp.convert_pb_to_casaspi(
-            freq_0 / 1e9 - (nchans // 2) * chan_bandwidth / 1e9,
-            freq_0 / 1e9 + (nchans // 2) * chan_bandwidth / 1e9,
-            freq_0 / 1e9, aghz, bghz, cghz, dghz)
+        I, a, b, c, d = vmct.convert_pb_to_casaspi(
+            cfg.obs.freq_0 / 1e9 - (cfg.obs.nchans // 2) * cfg.obs.chan_bandwidth / 1e9,
+            cfg.obs.freq_0 / 1e9 + (cfg.obs.nchans // 2) * cfg.obs.chan_bandwidth / 1e9,
+            cfg.obs.freq_0 / 1e9, aghz, bghz, cghz, dghz)
 
         vermeerkat.log.info("Using bandpass calibrator %s "
                             "with brightness of %.4f Jy "
@@ -317,7 +302,7 @@ for obs_metadata in obs_metadatas:
                             "as the flux scale reference" %
                             (bandpass_cal.name,
                              I, a, b, c, d,
-                             freq_0 / 1e6))
+                             cfg.obs.freq_0 / 1e6))
         # 1GC Calibration
         recipe.add("cab/casa_setjy", "init_flux_scaling",
             {
@@ -326,7 +311,7 @@ for obs_metadata in obs_metadatas:
                 "standard"      :   cfg.setjy_manual.standard,
                 "fluxdensity"   :   I,
                 "spix"          :   [a, b, c, d],
-                "reffreq"       :   "%.2fGHz" % (freq_0 / 1e9),
+                "reffreq"       :   "%.2fGHz" % (cfg.obs.freq_0 / 1e9),
                 "usescratch"    :   cfg.setjy_manual.usescratch,
                 "scalebychan"   :   cfg.setjy_manual.scalebychan,
                 "spw"           :   cfg.setjy_manual.spw,
