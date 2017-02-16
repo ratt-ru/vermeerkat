@@ -4,6 +4,7 @@ import os
 
 import numpy as np
 import katdal
+from katpoint.target import construct_radec_target
 
 import vermeerkat
 
@@ -146,13 +147,22 @@ def select_gain_calibrator(cfg, targets, gaincals):
                             "gain calibrators '%s'" % (
                                 default_gaincal, gaincal_names))
 
-    # Compute mean target position
-    mean_target = np.mean([t.radec() for t in targets], axis=0)
+    # Compute mean target position.
+    # TODO: This assumes all targets are close to each other
+    mean_radec = np.mean([t.radec() for t in targets], axis=0)
 
-    # Select gaincal candidate closest to mean target position
-    sqrd_dist = (mean_target - [g.radec() for g in gaincals])**2
-    lmdistances = np.sum(sqrd_dist, axis=1)
-    index = np.argmin(lmdistances)
+    # TODO: Is this the correct antenna to use for separation
+    # below?
+    ant = targets[0].antenna
+
+    # Create a fake katpoint target
+    mean_target = construct_radec_target(*mean_radec)
+
+    # Select gaincal candidate with least angular distance
+    # to mean target position
+    angular_distances = [mean_target.separation(g, antenna=ant)
+                                                for g in gaincals]
+    index = np.argmin(angular_distances)
 
     return index, gaincals[index]
 
