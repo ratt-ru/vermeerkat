@@ -23,6 +23,8 @@ import os
 import sys
 import re
 import glob
+import datetime
+import pytz
 from functools import reduce
 
 import numpy as np
@@ -39,8 +41,8 @@ stimela.register_globals()
 
 # Load in the configuration
 cfg = vmc.configuration(vmc.retrieve_args())
-# Register directories
 
+# Register directories
 INPUT = cfg.general.input
 OUTPUT = cfg.general.output
 PREFIX = cfg.general.prefix
@@ -74,6 +76,10 @@ for obs_metadata in obs_metadatas:
     # Map scan target name to a list of scans associated with it
     field_scan_map = vmu.create_field_scan_map(scans)
 
+    #Get the start and end of the observation
+    start_obs, end_obs = vmu.start_end_observation(os.path.join(INPUT,
+                                                                cfg.obs.h5file))
+
     # Categories the fields observed in each scan
     field_index, bpcals, gaincals, targets = vmu.categorise_fields(scans)
 
@@ -103,8 +109,13 @@ for obs_metadata in obs_metadatas:
                            "bandpass calibrators" % obs_metadata["ProductName"])
 
     # Select a gain calibrator
-    gaincal_index, gain_cal = vmu.select_gain_calibrator(cfg, targets,
-                                                                gaincals)
+    gaincal_index, gain_cal = vmu.select_gain_calibrator(cfg,
+                                                         targets,
+                                                         gaincals,
+                                                         observation_start=start_obs,
+                                                         scans=scans,
+                                                         strategy=cfg.general.gcal_selection_heuristic)
+
     # Compute the observation time spent on gain calibrators
     gaincal_scan_times = vmu.total_scan_times(field_scan_map, gaincals)
 
@@ -138,7 +149,7 @@ for obs_metadata in obs_metadatas:
                         "(total observation time: %s)" %
                             (gain_cal.name,
                              field_index[gain_cal.name],
-                             vmu.fmt_seconds(scan_seconds)))
+                             vmu.fmt_seconds(gaincal_scan_times[gaincal_index])))
     vermeerkat.log.info("Using '%s' (%d) as a bandpass calibrator (total "
                 "observation time: %s, minimum scan time: %s)" %
                             (bandpass_cal.name,
@@ -174,9 +185,18 @@ for obs_metadata in obs_metadatas:
                         (cfg.obs.freq_0 / 1e6,
                         (cfg.obs.nchans // 2) * cfg.obs.chan_bandwidth / 1e6,
                         cfg.obs.nchans))
+    vermeerkat.log.info("Observation start time: %s UTC. Observation end time "
+                        "%s UTC. Length %s" %
+        (start_obs.strftime("%Y-%m-%d %H:%M:%S"),
+         end_obs.strftime("%Y-%m-%d %H:%M:%S"),
+         str(end_obs - start_obs)))
 
-    # All good to go fire up the pipeline
-    recipe = stimela.Recipe("1GC Pipeline", ms_dir=MSDIR)
+    #########################################################################
+    #
+    # Conversions and fixes
+    #
+    #########################################################################
+    recipe = stimela.Recipe("Conversion Engine", ms_dir=MSDIR)
 
     # Convert
     recipe.add("cab/h5toms", "h5toms",
@@ -189,9 +209,31 @@ for obs_metadata in obs_metadatas:
         input=INPUT, output=OUTPUT,
         label="convert::h5toms")
 
+    # @mauch points out some MeerKAT h5 files contain flipped uvw
+    # coordinates. Better to recalculate this from ANTENNAS
+    # and be dead sure things will always work!
+    recipe.add("cab/casa_fixvis", "fixvis",
+        {
+            "vis"       :   cfg.obs.msfile,
+            "outputvis" :   cfg.obs.msfile, # into same ms please
+            "reuse"     :   cfg.casa_fixvis.reuse,
+        },
+        input=INPUT, output=OUTPUT,
+        label="recompute_uvw:: Recompute MeerKAT uvw coordinates")
+    conversion_pipe = ["convert",
+                       "recompute_uvw"]
+
+    recipe.run(conversion_pipe)
+
+    #########################################################################
+    #
+    # Preliminary RFI, band and autocorr flagging
+    #
+    #########################################################################
+    recipe = stimela.Recipe("Initial flagging Engine", ms_dir=MSDIR)
 
     # RFI and bad channel flagging
-    recipe.add("cab/rfimasker", "mask_stuff",
+    recipe.add("cab/rfimasker", "mask_knownrfi",
         {
             "msname" : cfg.obs.msfile,
             "mask"   : cfg.rfimask.rfi_mask_file,
@@ -207,30 +249,6 @@ for obs_metadata in obs_metadatas:
         },
         input=INPUT, output=OUTPUT,
         label="autoflag:: Auto Flagging ms")
-
-    # Custom user specified flags
-    # Casa does not sensibly do nothing if the defaults are specified
-    # removing this step
-#    userflags = {"msname" : cfg.obs.msfile}
-#    if cfg.flag_userflags.mode is not None:
-#        userflags["mode"] = cfg.flag_userflags.mode
-#    if cfg.flag_userflags.field is not None:
-#        userflags["field"] = cfg.flag_userflags.field
-#    if cfg.flag_userflags.antenna is not None:
-#        userflags["antenna"] = cfg.flag_userflags.antenna
-#    if cfg.flag_userflags.scan is not None:
-#        userflags["scan"] = cfg.flag_userflags.scan
-#    if cfg.flag_userflags.timerange is not None:
-#        userflags["timerange"] = cfg.flag_userflags.timerange
-#    if cfg.flag_userflags.spw is not None:
-#        userflags["spw"] = cfg.flag_userflags.spw
-#    if cfg.flag_userflags.autocorr is not None:
-#        userflags["autocorr"] = cfg.flag_userflags.autocorr
-#
-#    recipe.add("cab/casa_flagdata", "flag_userflags",
-#        userflags,
-#        input=INPUT, output=OUTPUT,
-#        label="flag_userflags:: Specify any additional flags from user")
 
     recipe.add("cab/casa_flagdata", "flag_bad_start_channels",
         {
@@ -265,25 +283,29 @@ for obs_metadata in obs_metadatas:
         input=INPUT, output=OUTPUT,
         label="flag_autocorrs:: Flag auto correlations")
 
-    # @mauch points out some MeerKAT h5 files contain flipped uvw
-    # coordinates. Better to recalculate this from ANTENNAS
-    # and be dead sure things will always work!
-    recipe.add("cab/casa_fixvis", "fixvis",
-        {
-            "vis"       :   cfg.obs.msfile,
-            "outputvis" :   cfg.obs.msfile, # into same ms please
-            "reuse"     :   cfg.casa_fixvis.reuse,
-        },
-        input=INPUT, output=OUTPUT,
-        label="recompute_uvw:: Recompute MeerKAT uvw coordinates")
+    # Run flagging run!
+    init_flagging = ["rfimask",
+                     "autoflag",
+                     "flag_bandstart",
+                     "flag_bandend",
+                     "flag_autocorrs"]
+    recipe.run(init_flagging)
 
-    #Run SetJY with our database of southern calibrators
+    #########################################################################
+    #
+    # Initial 1GC
+    #
+    # We first calibrate the calibrators for flagging
+    # purposes, we will want to discard these solutions when we
+    # did mitigation flagging and generate, hopefully, improved 1GC
+    # solutions
+    #########################################################################
+
+    # Selects the flux scale based on selected bandpass calibrator
+    # if it is in our southern standard then grab the coefficients
+    # to plug into CASA, otherwise fall back to the CASA standard
+    # as last resort and then fall over if it ain't in there either
     if bandpass_cal.name in calibrator_db:
-        vermeerkat.log.warn("Looks like your flux reference '%s' is not "
-                           "in our standard. Try pulling the latest "
-                           "VermeerKAT or if you have done "
-                           "so report this issue" % bandpass_cal.name)
-
         aghz = calibrator_db[bandpass_cal.name]["a_ghz"]
         bghz = calibrator_db[bandpass_cal.name]["b_ghz"]
         cghz = calibrator_db[bandpass_cal.name]["c_ghz"]
@@ -304,8 +326,7 @@ for obs_metadata in obs_metadatas:
                              I, a, b, c, d,
                              cfg.obs.freq_0 / 1e6))
         # 1GC Calibration
-        recipe.add("cab/casa_setjy", "init_flux_scaling",
-            {
+        setjy_options = {
                 "msname"        :   cfg.obs.msfile,
                 "field"         :   str(bpcal_field),
                 "standard"      :   cfg.setjy_manual.standard,
@@ -315,27 +336,29 @@ for obs_metadata in obs_metadatas:
                 "usescratch"    :   cfg.setjy_manual.usescratch,
                 "scalebychan"   :   cfg.setjy_manual.scalebychan,
                 "spw"           :   cfg.setjy_manual.spw,
-            },
-            input=INPUT, output=OUTPUT,
-            label="setjy:: Initial flux density scaling")
+        }
     else:
+        vermeerkat.log.warn("Looks like your flux reference '%s' is not "
+            "in our standard. We will now try to fall back to the CASA "
+            "standard you specified in your config file. "
+            "Try pulling the latest "
+            "VermeerKAT or if you have done "
+            "so report this issue" % bandpass_cal.name)
+
         # If model is not in @Ben's southern calibrators, then use CASA model.
         # If this is the case, the standard must be specified in the config file
-        recipe.add('cab/casa_setjy', 'flux_scaling', {
+        setjy_options = {
             "msname"    :   cfg.obs.msfile,
             "standard"  :   cfg.setjy_auto.standard,
             "field"     :   str(bpcal_field)
-            },
-            input=INPUT, output=OUTPUT,
-            label="setjy:: Initial flux density scaling")
+        }
 
     # @mauch points out some antenna positions may
     # be slightly off. This will cause a noticible
     # decorrelation on the longest baselines, so
     # better calibrate for this one (we can use the
     # bright bandpass and gain calibrator sources).
-    recipe.add("cab/casa_gaincal", "delay_cal",
-        {
+    delaycal_opts = {
             "msname"        : cfg.obs.msfile,
             "field"         : str(gaincal_field),
             "gaintype"      : cfg.delaycal.gaintype,
@@ -344,14 +367,11 @@ for obs_metadata in obs_metadatas:
             "refant"        : cfg.obs.refant,
             "caltable"      : cfg.obs.delaycal_table,
             "calmode"       : cfg.delaycal.calmode,
-        },
-        input=INPUT, output=OUTPUT,
-        label="delaycal:: Delay calibration")
+    }
 
     # The bandpass calibrator may vary in phase over time
     # so lets do a preliminary phase cal to correct for this
-    recipe.add("cab/casa_gaincal", "init_phase_cal",
-        {
+    bp_phasecal_opts = {
             "msname"        :   cfg.obs.msfile,
             "caltable"      :   cfg.obs.phasecal_table,
             "field"         :   str(bpcal_field),
@@ -361,15 +381,12 @@ for obs_metadata in obs_metadatas:
             "solnorm"       :   cfg.phase0.solnorm,
             "minsnr"        :   cfg.phase0.minsnr,
             "gaintable"     :   [cfg.obs.delaycal_table],
-        },
-        input=INPUT, output=OUTPUT,
-        label="phase0:: Initial phase calibration")
+    }
 
     # Then a bandpass calibration, lets work out a solution
     # per scan interval to see if things vary signifcantly
     # over time... this will be very bad for your reduction.
-    recipe.add("cab/casa_bandpass", "bandpass_cal",
-        {
+    bandpass_cal_opts =  {
             "msname"        :   cfg.obs.msfile,
             "caltable"      :   cfg.obs.bpasscal_table,
             "field"         :   str(bpcal_field),
@@ -384,14 +401,11 @@ for obs_metadata in obs_metadatas:
             "gaintable"     :   [cfg.obs.delaycal_table,
                                  cfg.obs.phasecal_table],
             "interp"        :   cfg.bandpass.interp,
-        },
-        input=INPUT, output=OUTPUT,
-        label="bandpass:: Bandpass calibration")
+    }
 
     # Finally we do a second order correction on the gain
     # cal source that is closest to the target fields
-    recipe.add("cab/casa_gaincal", "main_gain_calibration",
-        {
+    gain_cal_opts = {
             "msname"       :   cfg.obs.msfile,
             "caltable"     :   cfg.obs.ampcal_table,
             "field"        :   ",".join([str(x) for
@@ -406,30 +420,24 @@ for obs_metadata in obs_metadatas:
                                 cfg.obs.phasecal_table,
                                 cfg.obs.bpasscal_table],
             "interp"       :   cfg.gaincal.interp,
-        },
-        input=INPUT, output=OUTPUT,
-        label="gaincal:: Gain calibration")
+    }
 
     # Scale the gaincal solutions amplitude to that of the
     # bandpass calibrator (the flux scale reference)
-    recipe.add("cab/casa_fluxscale", "casa_fluxscale",
-        {
+    flux_scale_opts = {
             "msname"        :   cfg.obs.msfile,
             "caltable"      :   cfg.obs.ampcal_table,
             "fluxtable"     :   cfg.obs.fluxcal_table,
             "reference"     :   [bandpass_cal.name],
             "transfer"      :   [gain_cal.name],
             "incremental"   :   cfg.fluxscale.incremental,
-        },
-        input=INPUT, output=OUTPUT,
-        label="fluxscale:: Setting Fluxscale")
+    }
 
     # Apply gain solutions to all fields including
     # the calibrators so that we can diagnose problems more
     # easily. Later steps depend on this so don't remove
     # the gain application to calibrators
-    recipe.add("cab/casa_applycal", "apply_calibration",
-        {
+    apply_cal_opts = {
             "msname"        :   cfg.obs.msfile,
             "field"         :   ",".join([str(x) for x in
                                     target_fields + [bpcal_field, gaincal_field]]),
@@ -445,7 +453,42 @@ for obs_metadata in obs_metadatas:
             "interp"        :   cfg.applycal.interp,
             "spwmap"        :   cfg.applycal.spwmap,
             "parang"        :   cfg.applycal.parang,
-        },
+    }
+
+    recipe = stimela.Recipe("1.1GC Engine", ms_dir=MSDIR)
+
+    recipe.add("cab/casa_setjy", "init_flux_scaling",
+               setjy_options,
+               input=INPUT, output=OUTPUT,
+               label="setjy:: Initial flux density scaling")
+
+    recipe.add("cab/casa_gaincal", "delay_cal",
+        delaycal_opts,
+        input=INPUT, output=OUTPUT,
+        label="delaycal:: Delay calibration")
+
+    recipe.add("cab/casa_gaincal", "init_phase_cal",
+        bp_phasecal_opts,
+        input=INPUT, output=OUTPUT,
+        label="phase0:: Initial phase calibration")
+
+    recipe.add("cab/casa_bandpass", "bandpass_cal",
+        bandpass_cal_opts,
+        input=INPUT, output=OUTPUT,
+        label="bandpass:: Bandpass calibration")
+
+    recipe.add("cab/casa_gaincal", "main_gain_calibration",
+        gain_cal_opts,
+        input=INPUT, output=OUTPUT,
+        label="gaincal:: Gain calibration")
+
+    recipe.add("cab/casa_fluxscale", "casa_fluxscale",
+        flux_scale_opts,
+        input=INPUT, output=OUTPUT,
+        label="fluxscale:: Setting Fluxscale")
+
+    recipe.add("cab/casa_applycal", "apply_calibration",
+        apply_cal_opts,
         input=INPUT, output=OUTPUT,
         label="applycal:: Apply calibration solutions to target")
 
@@ -464,15 +507,14 @@ for obs_metadata in obs_metadatas:
     # Some antennae may malfunction during the observation and not track
     # properly. This causes severe phase problems so its better to remove
     # them from the equation... for this we look at the phase of the calibrated
-    # bandpass calibrator and flag out baselines (per channel) which are not up
+    # gain calibrator and flag out baselines (per channel) which are not up
     # to spec
-
     recipe.add("cab/politsiyakat", "flag_malfunctioning_antennas",
         {
             "task"                   : cfg.flag_baseline_phases.task,
             "msname"                 : cfg.obs.msfile,
             "data_column"            : cfg.flag_baseline_phases.data_column,
-            "cal_field"              : str(bpcal_field),
+            "cal_field"              : str(gaincal_field),
             "valid_phase_range"      : cfg.flag_baseline_phases.valid_phase_range,
             "max_invalid_datapoints" : cfg.flag_baseline_phases.max_invalid_datapoints,
             "output_dir"             : "",
@@ -480,7 +522,97 @@ for obs_metadata in obs_metadatas:
             "simulate"               : cfg.flag_baseline_phases.simulate,
         },
         input=INPUT, output=OUTPUT,
-        label="flag_baseline_phases:: Flag baselines based on calibrator phases")
+        label="flag_baseline_phases_gc:: Flag baselines based on calibrator phases")
+
+    #Go initial 1GC and further flagging
+    init_1gc = [ "setjy",
+                 "delaycal",
+                 "phase0",
+                 "bandpass",
+                 "gaincal",
+                 "fluxscale",
+                 "applycal",
+                 "autoflag_corrected_vis",
+                 "flag_baseline_phases_gc"]
+    recipe.run(init_1gc)
+
+    #########################################################################
+    #
+    # 1GC solutions gained from mitigation flagging
+    #
+    # Now that we mitigated some of the worst RFI and observation problems
+    # we can generate better 1GC solutions
+    #########################################################################
+    recipe = stimela.Recipe("1.2GC Engine", ms_dir=MSDIR)
+
+    recipe.add("cab/casa_setjy", "init_flux_scaling",
+               setjy_options,
+               input=INPUT, output=OUTPUT,
+               label="setjy:: Initial flux density scaling")
+
+    delaycal_opts["caltable"] = cfg.obs.post_mit_delaycal_table
+    recipe.add("cab/casa_gaincal", "delay_cal",
+        delaycal_opts,
+        input=INPUT, output=OUTPUT,
+        label="delaycal:: Delay calibration")
+
+    bp_phasecal_opts["caltable"] = cfg.obs.post_mit_phasecal_table
+    bp_phasecal_opts["gaintable"] = [cfg.obs.post_mit_delaycal_table]
+    recipe.add("cab/casa_gaincal", "init_phase_cal",
+        bp_phasecal_opts,
+        input=INPUT, output=OUTPUT,
+        label="phase0:: Initial phase calibration")
+
+    bandpass_cal_opts["caltable"] = cfg.obs.post_mit_bpasscal_table
+    bandpass_cal_opts["gaintable"] = [cfg.obs.post_mit_delaycal_table,
+                                cfg.obs.post_mit_phasecal_table]
+    recipe.add("cab/casa_bandpass", "bandpass_cal",
+        bandpass_cal_opts,
+        input=INPUT, output=OUTPUT,
+        label="bandpass:: Bandpass calibration")
+
+    gain_cal_opts["caltable"] = cfg.obs.post_mit_ampcal_table
+    gain_cal_opts["gaintable"] = [cfg.obs.post_mit_delaycal_table,
+                            cfg.obs.post_mit_phasecal_table,
+                            cfg.obs.post_mit_bpasscal_table]
+    recipe.add("cab/casa_gaincal", "main_gain_calibration",
+        gain_cal_opts,
+        input=INPUT, output=OUTPUT,
+        label="gaincal:: Gain calibration")
+
+    flux_scale_opts["caltable"] = cfg.obs.post_mit_ampcal_table
+    flux_scale_opts["fluxtable"] = cfg.obs.post_mit_fluxcal_table
+    recipe.add("cab/casa_fluxscale", "casa_fluxscale",
+        flux_scale_opts,
+        input=INPUT, output=OUTPUT,
+        label="fluxscale:: Setting Fluxscale")
+
+    apply_cal_opts["gaintable"] =[cfg.obs.post_mit_delaycal_table,
+                             cfg.obs.post_mit_phasecal_table,
+                             cfg.obs.post_mit_bpasscal_table,
+                             cfg.obs.post_mit_fluxcal_table]
+    recipe.add("cab/casa_applycal", "apply_calibration",
+        apply_cal_opts,
+        input=INPUT, output=OUTPUT,
+        label="applycal:: Apply calibration solutions to target")
+
+    second_1gc = [ "setjy",
+                   "delaycal",
+                   "phase0",
+                   "bandpass",
+                   "gaincal",
+                   "fluxscale",
+                   "applycal",
+                 ]
+    recipe.run(second_1gc)
+
+    #########################################################################
+    #
+    # Post 1GC diagnostic plots
+    #
+    # With our best solutions in hand we plot some results for the observer
+    #########################################################################
+    recipe = stimela.Recipe("1GC Diagnostics Engine", ms_dir=MSDIR)
 
     # Diagnostic: amplitude vs uv dist of the bandpass calibrator
     # @mauch points out we expect all baselines to observe the same amplitude
@@ -626,41 +758,6 @@ for obs_metadata in obs_metadatas:
         input=INPUT, output=OUTPUT,
         label="plot_phase_freq:: Diagnostic plot of phase with freq")
 
-    # # this wastes disk space... who cares if the calibrators are in there or not
-    # # it's actually very useful to keep them and inspect their solutions -
-    # # DO NOT ADD THIS STEP
-    # recipe.add("cab/casa_split", "split_calibrated_target_data",
-    #     {
-    #         "msname"        :   msname,
-    #         "output_msname" :   msname[:-3]+"_deep2.ms",
-    #         "field"         :   target,
-    #     },
-    # input=INPUT, output=OUTPUT,
-    # label="split_target:: Split calibrated target data")
-
-    # imaging
-    for target_field, target in zip(target_fields, targets):
-        imname = cfg.obs.basename + "_1GC_" + target.name
-        recipe.add("cab/wsclean", "wsclean_%d" % field_index[target.name],
-            {
-                "msname"            : cfg.obs.msfile,
-                "column"            : cfg.wsclean_image.column,
-                "weight"            : "briggs %.2f"%(cfg.wsclean_image.robust),
-                "npix"              : cfg.obs.im_npix,
-                "cellsize"          : cfg.obs.angular_resolution*cfg.obs.sampling,
-                "clean_iterations"  : cfg.wsclean_image.clean_iterations,
-                "mgain"             : cfg.wsclean_image.mgain,
-                "channelsout"       : cfg.obs.im_numchans,
-                "joinchannels"      : cfg.wsclean_image.joinchannels,
-                "field"             : target_field,
-                "name"              : imname,
-            },
-            input=INPUT, output=OUTPUT,
-            label="image_%d::wsclean" % target_field)
-
-  # [Sphe] I don't think images of calibrators are needed. These are point sources, so images give us nothing we can't get from
-  # gain/phase plots.
-
     # Diagnostic only: image bandpass
     recipe.add("cab/wsclean", "wsclean_bandpass",
         {
@@ -697,39 +794,49 @@ for obs_metadata in obs_metadatas:
         input=INPUT, output=OUTPUT,
         label="image_gain::wsclean")
 
-    # Add Flagging and 1GC steps
-    onegcsteps = [
-                   "convert",
-                   "rfimask",
-                   "autoflag",
-                   "flag_bandstart",
-                   "flag_bandend",
-                   "flag_autocorrs",
-                   "recompute_uvw",
-                   "flag_baseline_phases",
-                   "setjy",
-                   "delaycal",
-                   "phase0",
-                   "bandpass",
-                   "gaincal",
-                   "fluxscale",
-                   "applycal",
-                   "autoflag_corrected_vis",
-                   "plot_ampuvdist",
-                   "plot_phaseuvdist",
-                   "plot_phaseball",
-                   "plot_amp_freq",
-                   "plot_phase_time",
-                   "plot_phase_freq",
-                 ]
-    onegcsteps += ["image_%d" % t for t in target_fields]
-    onegcsteps += ["image_bandpass", "image_gain"] # diagnostic only
+    diagnostics_1gc = [ "plot_ampuvdist",
+                        "plot_phaseuvdist",
+                        "plot_phaseball",
+                        "plot_amp_freq",
+                        "plot_phase_time",
+                        "plot_phase_freq",
+                      ]
+    diagnostics_1gc += ["image_bandpass", "image_gain"] # diagnostic only
+    recipe.run(diagnostics_1gc)
 
-    # RUN FOREST RUN!!!
-    # @simon The pipeline exceptions are now being handled in the recipe.run() function
-    recipe.run(onegcsteps)
+    #########################################################################
+    #
+    # Post 1GC imaging
+    #
+    #########################################################################
+    recipe = stimela.Recipe("1GC Imaging Engine", ms_dir=MSDIR)
+    # imaging
+    for target_field, target in zip(target_fields, targets):
+        imname = cfg.obs.basename + "_1GC_" + target.name
+        recipe.add("cab/wsclean", "wsclean_%d" % field_index[target.name],
+            {
+                "msname"            : cfg.obs.msfile,
+                "column"            : cfg.wsclean_image.column,
+                "weight"            : "briggs %.2f"%(cfg.wsclean_image.robust),
+                "npix"              : cfg.obs.im_npix,
+                "cellsize"          : cfg.obs.angular_resolution*cfg.obs.sampling,
+                "clean_iterations"  : cfg.wsclean_image.clean_iterations,
+                "mgain"             : cfg.wsclean_image.mgain,
+                "channelsout"       : cfg.obs.im_numchans,
+                "joinchannels"      : cfg.wsclean_image.joinchannels,
+                "field"             : target_field,
+                "name"              : imname,
+            },
+            input=INPUT, output=OUTPUT,
+            label="image_%d::wsclean" % target_field)
 
-    ### Let the 2GC begin
+    recipe.run(["image_%d" % t for t in target_fields])
+
+    #########################################################################
+    #
+    # Self calibration (2nd gen)
+    #
+    #########################################################################
     recipe = stimela.Recipe("2GC Pipeline", ms_dir=MSDIR)
 
     # Add bitflag column. To keep track of flagsets
@@ -882,21 +989,19 @@ for obs_metadata in obs_metadatas:
               "V as diagnostic" % target_field)
 
     # Initial selfcal loop
-    twogcsteps = ["prepms",
+    init_2gc = ["prepms",
                 "move_corrdata_to_data",
                ]
-
     for target_field in target_fields:
-        twogcsteps += ["source_find_%d" % target_field,
-                       "stitch_cube_%d" % target_field,
-                       "SPI_%d" % target_field,
-                       "SELFCAL0_%d" % target_field,
-                       "image_SC0_%d" % target_field,
-                       "MSK_SC0_%d" % target_field,
-                      ]
-
+        init_2gc += ["source_find_%d" % target_field,
+                     "stitch_cube_%d" % target_field,
+                     "SPI_%d" % target_field,
+                     "SELFCAL0_%d" % target_field,
+                     "image_SC0_%d" % target_field,
+                     "MSK_SC0_%d" % target_field,
+                    ]
     # diagnostic only:
-    twogcsteps += ["image_stokesv_residue_%d" % t for t in target_fields]
+    init_2gc += ["image_stokesv_residue_%d" % t for t in target_fields]
 
-    recipe.run(twogcsteps)
+    recipe.run(init_2gc)
 
