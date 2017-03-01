@@ -25,8 +25,9 @@ import re
 import glob
 import datetime
 import pytz
+import copy
 from functools import reduce
-
+import math
 import numpy as np
 
 import stimela
@@ -428,8 +429,8 @@ for obs_metadata in obs_metadatas:
             "msname"        :   cfg.obs.msfile,
             "caltable"      :   cfg.obs.ampcal_table,
             "fluxtable"     :   cfg.obs.fluxcal_table,
-            "reference"     :   [bandpass_cal.name],
-            "transfer"      :   [gain_cal.name],
+            "reference"     :   str(bpcal_field),
+            "transfer"      :   str(gaincal_field),
             "incremental"   :   cfg.fluxscale.incremental,
     }
 
@@ -514,7 +515,7 @@ for obs_metadata in obs_metadatas:
             "task"                   : cfg.flag_baseline_phases.task,
             "msname"                 : cfg.obs.msfile,
             "data_column"            : cfg.flag_baseline_phases.data_column,
-            "cal_field"              : str(gaincal_field),
+            "cal_field"              : str(bpcal_field),
             "valid_phase_range"      : cfg.flag_baseline_phases.valid_phase_range,
             "max_invalid_datapoints" : cfg.flag_baseline_phases.max_invalid_datapoints,
             "output_dir"             : "",
@@ -522,7 +523,7 @@ for obs_metadata in obs_metadatas:
             "simulate"               : cfg.flag_baseline_phases.simulate,
         },
         input=INPUT, output=OUTPUT,
-        label="flag_baseline_phases_gc:: Flag baselines based on calibrator phases")
+        label="flag_baseline_phases_bp:: Flag baselines based on calibrator phases")
 
     #Go initial 1GC and further flagging
     init_1gc = [ "setjy",
@@ -533,7 +534,8 @@ for obs_metadata in obs_metadatas:
                  "fluxscale",
                  "applycal",
                  "autoflag_corrected_vis",
-                 "flag_baseline_phases_gc"]
+                 "flag_baseline_phases_bp"
+               ]
     recipe.run(init_1gc)
 
     #########################################################################
@@ -542,10 +544,14 @@ for obs_metadata in obs_metadatas:
     #
     # Now that we mitigated some of the worst RFI and observation problems
     # we can generate better 1GC solutions
+    #
+    # This is an optional step if we cannot generate new solutions due
+    # to significant flagging we can skip and use the corrected data
+    # as is.
     #########################################################################
     recipe = stimela.Recipe("1.2GC Engine", ms_dir=MSDIR)
 
-    recipe.add("cab/casa_setjy", "init_flux_scaling",
+    recipe.add("cab/casa_setjy", "init_flux_scaling_postmit",
                setjy_options,
                input=INPUT, output=OUTPUT,
                label="setjy:: Initial flux density scaling")
@@ -558,7 +564,7 @@ for obs_metadata in obs_metadatas:
 
     bp_phasecal_opts["caltable"] = cfg.obs.post_mit_phasecal_table
     bp_phasecal_opts["gaintable"] = [cfg.obs.post_mit_delaycal_table]
-    recipe.add("cab/casa_gaincal", "init_phase_cal",
+    recipe.add("cab/casa_gaincal", "init_phase_cal_postmit",
         bp_phasecal_opts,
         input=INPUT, output=OUTPUT,
         label="phase0:: Initial phase calibration")
@@ -566,7 +572,7 @@ for obs_metadata in obs_metadatas:
     bandpass_cal_opts["caltable"] = cfg.obs.post_mit_bpasscal_table
     bandpass_cal_opts["gaintable"] = [cfg.obs.post_mit_delaycal_table,
                                 cfg.obs.post_mit_phasecal_table]
-    recipe.add("cab/casa_bandpass", "bandpass_cal",
+    recipe.add("cab/casa_bandpass", "bandpass_cal_postmit",
         bandpass_cal_opts,
         input=INPUT, output=OUTPUT,
         label="bandpass:: Bandpass calibration")
@@ -575,14 +581,14 @@ for obs_metadata in obs_metadatas:
     gain_cal_opts["gaintable"] = [cfg.obs.post_mit_delaycal_table,
                             cfg.obs.post_mit_phasecal_table,
                             cfg.obs.post_mit_bpasscal_table]
-    recipe.add("cab/casa_gaincal", "main_gain_calibration",
+    recipe.add("cab/casa_gaincal", "main_gain_calibration_postmit",
         gain_cal_opts,
         input=INPUT, output=OUTPUT,
         label="gaincal:: Gain calibration")
 
     flux_scale_opts["caltable"] = cfg.obs.post_mit_ampcal_table
     flux_scale_opts["fluxtable"] = cfg.obs.post_mit_fluxcal_table
-    recipe.add("cab/casa_fluxscale", "casa_fluxscale",
+    recipe.add("cab/casa_fluxscale", "casa_fluxscale_postmit",
         flux_scale_opts,
         input=INPUT, output=OUTPUT,
         label="fluxscale:: Setting Fluxscale")
@@ -591,7 +597,7 @@ for obs_metadata in obs_metadatas:
                              cfg.obs.post_mit_phasecal_table,
                              cfg.obs.post_mit_bpasscal_table,
                              cfg.obs.post_mit_fluxcal_table]
-    recipe.add("cab/casa_applycal", "apply_calibration",
+    recipe.add("cab/casa_applycal", "apply_calibration_postmit",
         apply_cal_opts,
         input=INPUT, output=OUTPUT,
         label="applycal:: Apply calibration solutions to target")
@@ -604,7 +610,14 @@ for obs_metadata in obs_metadatas:
                    "fluxscale",
                    "applycal",
                  ]
-    recipe.run(second_1gc)
+    try:
+        recipe.run(second_1gc)
+        pass
+    except:
+        vermeerkat.log.warning("Post mitigation 1GC calibration failure. "
+                               "Inspect the logs. We will continue with "
+                               "the solutions derived pre-mitigation "
+                               "flagging, but with mitigation flags applied")
 
     #########################################################################
     #
@@ -617,8 +630,7 @@ for obs_metadata in obs_metadatas:
     # Diagnostic: amplitude vs uv dist of the bandpass calibrator
     # @mauch points out we expect all baselines to observe the same amplitude
     # for the point source-like bandpass calibrator
-    recipe.add("cab/casa_plotms", "plot_amp_v_uv_dist_of_bp_calibrator",
-        {
+    plot_ampuvdist_opts = {
             "msname"            : cfg.obs.msfile,
             "xaxis"             : cfg.plot_ampuvdist.xaxis,
             "yaxis"             : cfg.plot_ampuvdist.yaxis,
@@ -631,17 +643,14 @@ for obs_metadata in obs_metadatas:
             "coloraxis"         : cfg.plot_ampuvdist.coloraxis,
             "expformat"         : cfg.plot_ampuvdist.expformat,
             "exprange"          : cfg.plot_ampuvdist.exprange,
-            "plotfile"          : cfg.obs.basename + "_" +
+            "plotfile"          : cfg.obs.basename + "_bp_" +
                                   plot_name[bandpass_cal.name] + "_" +
                                   "ampuvdist.png",
             "overwrite"         :   True,
-        },
-        input=INPUT, output=OUTPUT,
-        label="plot_ampuvdist:: Diagnostic plot of amplitude with uvdist")
+    }
 
     #Diagnostic: phase vs uv dist of the bandpass calibrator
-    recipe.add("cab/casa_plotms", "plot_phase_v_uv_dist_of_bp_calibrator",
-        {
+    plot_phaseuvdist_opts = {
             "msname"            : cfg.obs.msfile,
             "xaxis"             : cfg.plot_phaseuvdist.xaxis,
             "yaxis"             : cfg.plot_phaseuvdist.yaxis,
@@ -654,17 +663,14 @@ for obs_metadata in obs_metadatas:
             "coloraxis"         : cfg.plot_phaseuvdist.coloraxis,
             "expformat"         : cfg.plot_phaseuvdist.expformat,
             "exprange"          : cfg.plot_phaseuvdist.exprange,
-            "plotfile"          : cfg.obs.basename + "_" +
+            "plotfile"          : cfg.obs.basename + "_bp_" +
                                   plot_name[bandpass_cal.name] + "_" +
                                   "phaseuvdist.png",
             "overwrite"         :   True,
-        },
-        input=INPUT, output=OUTPUT,
-        label="plot_phaseuvdist:: Diagnostic plot of phase with uvdist")
+    }
 
     # Diagnostic: amplitude vs phase of bp calibrator per antenna
-    recipe.add("cab/casa_plotms", "plot_amp_v_phase_of_bp_calibrator",
-        {
+    plot_phaseball_opts = {
             "msname"            : cfg.obs.msfile,
             "xaxis"             : cfg.plot_phaseball.xaxis,
             "yaxis"             : cfg.plot_phaseball.yaxis,
@@ -677,17 +683,14 @@ for obs_metadata in obs_metadatas:
             "coloraxis"         : cfg.plot_phaseball.coloraxis,
             "expformat"         : cfg.plot_phaseball.expformat,
             "exprange"          : cfg.plot_phaseball.exprange,
-            "plotfile"          : cfg.obs.basename + "_" +
+            "plotfile"          : cfg.obs.basename + "_bp_" +
                                   plot_name[bandpass_cal.name] + "_" +
                                   "phaseball.png",
             "overwrite"         :   True,
-        },
-        input=INPUT, output=OUTPUT,
-        label="plot_phaseball:: Diagnostic plot of phaseball")
+    }
 
     # Diagnostic: amplitude vs frequency of bp calibrator
-    recipe.add("cab/casa_plotms", "plot_amp_v_freq_of_bp_calibrator",
-        {
+    plot_amp_freq_opts = {
             "msname"            : cfg.obs.msfile,
             "xaxis"             : cfg.plot_amp_freq.xaxis,
             "yaxis"             : cfg.plot_amp_freq.yaxis,
@@ -700,20 +703,17 @@ for obs_metadata in obs_metadatas:
             "coloraxis"         : cfg.plot_amp_freq.coloraxis,
             "expformat"         : cfg.plot_amp_freq.expformat,
             "exprange"          : cfg.plot_amp_freq.exprange,
-            "plotfile"          : cfg.obs.basename + "_" +
+            "plotfile"          : cfg.obs.basename + "_bp_" +
                                   plot_name[bandpass_cal.name] + "_" +
                                   "band.png",
             "overwrite"         :   True,
-        },
-        input=INPUT, output=OUTPUT,
-        label="plot_amp_freq:: Diagnostic plot of band")
+    }
 
     # Diagnostic: phase vs time of bp calibrator
     # @oms points out slopes in this will indicate problems with
     # digitizer reference timing / probably also any uncorrected
     # antenna positions
-    recipe.add("cab/casa_plotms", "plot_phase_vs_time_of_bp_calibrator",
-        {
+    plot_phase_time_opts = {
             "msname"            : cfg.obs.msfile,
             "xaxis"             : cfg.plot_phase_time.xaxis,
             "yaxis"             : cfg.plot_phase_time.yaxis,
@@ -726,18 +726,14 @@ for obs_metadata in obs_metadatas:
             "coloraxis"         : cfg.plot_phase_time.coloraxis,
             "expformat"         : cfg.plot_phase_time.expformat,
             "exprange"          : cfg.plot_phase_time.exprange,
-            "plotfile"          : cfg.obs.basename + "_" +
+            "plotfile"          : cfg.obs.basename + "_bp_" +
                                   plot_name[bandpass_cal.name] + "_" +
                                   "phasevtime.png",
             "overwrite"         :   True,
-        },
-        input=INPUT, output=OUTPUT,
-        label="plot_phase_time:: Diagnostic plot of phase with time")
-
+    }
     # Diagnostic: phase vs time of bp calibrator
     # For similar purposes as phase vs freq
-    recipe.add("cab/casa_plotms", "plot_phase_vs_freq_of_bp_calibrator",
-        {
+    plot_phase_freq_opts = {
             "msname"            : cfg.obs.msfile,
             "xaxis"             : cfg.plot_phase_freq.xaxis,
             "yaxis"             : cfg.plot_phase_freq.yaxis,
@@ -750,13 +746,100 @@ for obs_metadata in obs_metadatas:
             "coloraxis"         : cfg.plot_phase_freq.coloraxis,
             "expformat"         : cfg.plot_phase_freq.expformat,
             "exprange"          : cfg.plot_phase_freq.exprange,
-            "plotfile"          : cfg.obs.basename + "_" +
+            "plotfile"          : cfg.obs.basename + "_bp_" +
                                   plot_name[bandpass_cal.name] + "_" +
                                   "phasevfreq.png",
             "overwrite"         :   True,
-        },
+    }
+
+    recipe.add("cab/casa_plotms", "plot_amp_v_uv_dist_of_bp_calibrator",
+        copy.deepcopy(plot_ampuvdist_opts),
         input=INPUT, output=OUTPUT,
-        label="plot_phase_freq:: Diagnostic plot of phase with freq")
+        label="plot_ampuvdist_bp:: Diagnostic plot of amplitude with uvdist")
+
+    recipe.add("cab/casa_plotms", "plot_phase_v_uv_dist_of_bp_calibrator",
+        copy.deepcopy(plot_phaseuvdist_opts),
+        input=INPUT, output=OUTPUT,
+        label="plot_phaseuvdist_bp:: Diagnostic plot of phase with uvdist")
+
+    recipe.add("cab/casa_plotms", "plot_amp_v_phase_of_bp_calibrator",
+        copy.deepcopy(plot_phaseball_opts),
+        input=INPUT, output=OUTPUT,
+        label="plot_phaseball_bp:: Diagnostic plot of phaseball")
+
+    recipe.add("cab/casa_plotms", "plot_amp_v_freq_of_bp_calibrator",
+        copy.deepcopy(plot_amp_freq_opts),
+        input=INPUT, output=OUTPUT,
+        label="plot_amp_freq_bp:: Diagnostic plot of band")
+
+    recipe.add("cab/casa_plotms", "plot_phase_vs_time_of_bp_calibrator",
+        copy.deepcopy(plot_phase_time_opts),
+        input=INPUT, output=OUTPUT,
+        label="plot_phase_time_bp:: Diagnostic plot of phase with time")
+
+    recipe.add("cab/casa_plotms", "plot_phase_vs_freq_of_bp_calibrator",
+        copy.deepcopy(plot_phase_freq_opts),
+        input=INPUT, output=OUTPUT,
+        label="plot_phase_freq_bp:: Diagnostic plot of phase with freq")
+
+    plot_ampuvdist_opts["field"] = str(gaincal_field)
+    plot_ampuvdist_opts["plotfile"] = cfg.obs.basename + "_gc_" +\
+                                      plot_name[gain_cal.name] + "_" +\
+                                      "ampuvdist.png"
+    recipe.add("cab/casa_plotms", "plot_amp_v_uv_dist_of_gc_calibrator",
+        plot_ampuvdist_opts,
+        input=INPUT, output=OUTPUT,
+        label="plot_ampuvdist_gc:: Diagnostic plot of amplitude with uvdist")
+
+    plot_phaseuvdist_opts["field"] = str(gaincal_field)
+    plot_phaseuvdist_opts["plotfile"] = cfg.obs.basename + "_gc_" +\
+                                      plot_name[gain_cal.name] + "_" +\
+                                      "phaseuvdist.png"
+    recipe.add("cab/casa_plotms", "plot_phase_v_uv_dist_of_gc_calibrator",
+        plot_phaseuvdist_opts,
+        input=INPUT, output=OUTPUT,
+        label="plot_phaseuvdist_gc:: Diagnostic plot of phase with uvdist")
+
+    plot_phaseball_opts["field"] = str(gaincal_field)
+    plot_phaseball_opts["plotfile"] = cfg.obs.basename + "_gc_" +\
+                                      plot_name[gain_cal.name] + "_" +\
+                                      "phaseball.png"
+    recipe.add("cab/casa_plotms", "plot_amp_v_phase_of_gc_calibrator",
+        plot_phaseball_opts,
+        input=INPUT, output=OUTPUT,
+        label="plot_phaseball_gc:: Diagnostic plot of phaseball")
+
+    plot_amp_freq_opts["field"] = str(gaincal_field)
+    plot_amp_freq_opts["plotfile"] = cfg.obs.basename + "_gc_" +\
+                                      plot_name[gain_cal.name] + "_" +\
+                                      "band.png"
+    recipe.add("cab/casa_plotms", "plot_amp_v_freq_of_gc_calibrator",
+        plot_amp_freq_opts,
+        input=INPUT, output=OUTPUT,
+        label="plot_amp_freq_gc:: Diagnostic plot of band")
+
+    plot_phase_time_opts["field"] = str(gaincal_field)
+    plot_phase_time_opts["plotfile"] = cfg.obs.basename + "_gc_" +\
+                                       plot_name[gain_cal.name] + "_" +\
+                                       "phasevtime.png"
+
+    plot_phase_time_opts["field"] = str(gaincal_field)
+    plot_phase_time_opts["plotfile"] = cfg.obs.basename + "_gc_" +\
+                                      plot_name[gain_cal.name] + "_" +\
+                                      "phasevtime.png"
+    recipe.add("cab/casa_plotms", "plot_phase_vs_time_of_gc_calibrator",
+        plot_phase_time_opts,
+        input=INPUT, output=OUTPUT,
+        label="plot_phase_time_gc:: Diagnostic plot of phase with time")
+
+    plot_phase_freq_opts["field"] = str(gaincal_field)
+    plot_phase_freq_opts["plotfile"] = cfg.obs.basename + "_gc_" +\
+                                      plot_name[gain_cal.name] + "_" +\
+                                      "phasevfreq.png"
+    recipe.add("cab/casa_plotms", "plot_phase_vs_freq_of_gc_calibrator",
+        plot_phase_freq_opts,
+        input=INPUT, output=OUTPUT,
+        label="plot_phase_freq_gc:: Diagnostic plot of phase with freq")
 
     # Diagnostic only: image bandpass
     recipe.add("cab/wsclean", "wsclean_bandpass",
@@ -764,7 +847,7 @@ for obs_metadata in obs_metadatas:
             "msname"            : cfg.obs.msfile,
             "column"            : cfg.wsclean_bandpass.column,
             "weight"            : "briggs %.2f"%(cfg.wsclean_bandpass.robust),
-            "npix"              : cfg.obs.im_npix / 2, # don't need the full FOV
+            "npix"              : cfg.obs.im_npix,
             "cellsize"          : cfg.obs.angular_resolution * cfg.obs.sampling,
             "clean_iterations"  : cfg.wsclean_bandpass.clean_iterations,
             "mgain"             : cfg.wsclean_bandpass.mgain,
@@ -782,7 +865,7 @@ for obs_metadata in obs_metadatas:
             "msname"            : cfg.obs.msfile,
             "column"            : cfg.wsclean_gain.column,
             "weight"            : "briggs %.2f"%(cfg.wsclean_gain.robust),
-            "npix"              : cfg.obs.im_npix / 2, # don't need the full FOV
+            "npix"              : cfg.obs.im_npix,
             "cellsize"          : cfg.obs.angular_resolution*cfg.obs.sampling,
             "clean_iterations"  : cfg.wsclean_gain.clean_iterations,
             "mgain"             : cfg.wsclean_gain.mgain,
@@ -794,12 +877,19 @@ for obs_metadata in obs_metadatas:
         input=INPUT, output=OUTPUT,
         label="image_gain::wsclean")
 
-    diagnostics_1gc = [ "plot_ampuvdist",
-                        "plot_phaseuvdist",
-                        "plot_phaseball",
-                        "plot_amp_freq",
-                        "plot_phase_time",
-                        "plot_phase_freq",
+    diagnostics_1gc = [ "plot_ampuvdist_bp",
+                        "plot_phaseuvdist_bp",
+                        "plot_phaseball_bp",
+                        "plot_amp_freq_bp",
+                        "plot_phase_time_bp",
+                        "plot_phase_freq_bp",
+                        "plot_ampuvdist_gc",
+                        "plot_phaseuvdist_gc",
+                        "plot_phaseball_gc",
+                        "plot_amp_freq_gc",
+                        "plot_phase_time_gc",
+                        "plot_phase_freq_gc",
+
                       ]
     diagnostics_1gc += ["image_bandpass", "image_gain"] # diagnostic only
     recipe.run(diagnostics_1gc)
@@ -826,6 +916,7 @@ for obs_metadata in obs_metadatas:
                 "joinchannels"      : cfg.wsclean_image.joinchannels,
                 "field"             : target_field,
                 "name"              : imname,
+                "auto-threshold"    : cfg.wsclean_image.autothreshold,
             },
             input=INPUT, output=OUTPUT,
             label="image_%d::wsclean" % target_field)
@@ -834,10 +925,10 @@ for obs_metadata in obs_metadatas:
 
     #########################################################################
     #
-    # Self calibration (2nd gen)
+    # Phase only self calibration (2nd gen)
     #
     #########################################################################
-    recipe = stimela.Recipe("2GC Pipeline", ms_dir=MSDIR)
+    recipe = stimela.Recipe("Initial phase-only 2GC Pipeline", ms_dir=MSDIR)
 
     # Add bitflag column. To keep track of flagsets
     recipe.add("cab/msutils", "msutils",
@@ -871,12 +962,12 @@ for obs_metadata in obs_metadatas:
             {
                 "image"         : "%s:output"%imname_mfs,
                 "outfile"       : model_prefix+".fits",
-                "thresh_pix"    : cfg.source_find.thresh_pix,
-                "thresh_isl"    : cfg.source_find.thresh_isl,
+                "thresh_pix"    : cfg.source_find0.thresh_pix,
+                "thresh_isl"    : cfg.source_find0.thresh_isl,
                 "port2tigger"   :   True,
             },
             input=INPUT, output=OUTPUT,
-            label="source_find_%d:: Extract sources from previous round of cal" % target_field)
+            label="source_find0_%d:: Extract sources from previous round of cal" % target_field)
 
         # Stitch wsclean channel images into a cube
         cubename = cfg.obs.basename + "_1GC_" + plot_name[target.name] + "-CLEAN_cube.fits"
@@ -888,7 +979,7 @@ for obs_metadata in obs_metadatas:
                 "fits-axis" : 3,
             },
             input=INPUT, output=OUTPUT,
-            label="stitch_cube_%d:: Stitch MFS image slices into a cube" % target_field)
+            label="stitch_cube0_%d:: Stitch MFS image slices into a cube" % target_field)
 
         # Add SPIs
         recipe.add("cab/specfit", "add_SPIs_LSM0",
@@ -898,69 +989,272 @@ for obs_metadata in obs_metadatas:
                 "output-spi-error-image":   "%s-spi.error.fits"%imname_prefix,
                 "input-skymodel"        :   "%s:output"%model_name, # model to which SPIs must be added
                 "output-skymodel"       :   model_name,
-                "tolerance-range"       :   cfg.specfit.tol,
+                "tolerance-range"       :   cfg.specfit0.tol,
                 "freq0"                 :   cfg.obs.freq_0,    # reference frequency for SPI calculation
-                "sigma-level"           :   cfg.specfit.sigma,
+                "sigma-level"           :   cfg.specfit0.sigma,
             },
             input=INPUT, output=OUTPUT,
-            label="SPI_%d::Add SPIs to LSM" % target_field)
+            label="SPI0_%d::Add SPIs to LSM" % target_field)
 
         # Selfcal and subtract brightest sources
         recipe.add("cab/calibrator", "Initial_Gjones_subtract_LSM0",
             {
                 "skymodel"  :   "%s:output"%model_name,
-                "label"     :   cfg.selfcal.label,
+                "label"     :   cfg.selfcal0.label,
                 "msname"    :   cfg.obs.msfile,
-                "threads"   :   cfg.selfcal.ncpu,
-                "column"    :   cfg.selfcal.column,
-                "output-data"    :   cfg.selfcal.output,
-                "Gjones"    :   cfg.selfcal.gjones,
-                "Gjones-solution-intervals" : map(int, [float(cfg.obs.gain_sol_int[:-1]), cfg.obs.nchans / float(1000)]),
-                "DDjones-smoothing-intervals" :  cfg.selfcal.ddjones_smoothing,
+                "threads"   :   cfg.selfcal0.ncpu,
+                "column"    :   cfg.selfcal0.column,
+                "output-data"    :   cfg.selfcal0.output,
+                "Gjones"    :   cfg.selfcal0.gjones,
+                "Gjones-solution-intervals" : [int(math.ceil(float(cfg.obs.gain_sol_int[:-1]))),
+                                               int(cfg.obs.nchans /
+                                                   float(100))],
+                "DDjones-smoothing-intervals" :  cfg.selfcal0.ddjones_smoothing,
                 # TODO: MeerKAT beams need to go in this section
-                "Ejones"    :   cfg.selfcal.ejones,
-                "beam-files-pattern" : cfg.selfcal.beam_files_pattern,
-                "beam-l-axis" : cfg.selfcal.beam_l_axis,
-                "beam-m-axis" : cfg.selfcal.beam_m_axis,
-                "Gjones-ampl-clipping"  :   cfg.selfcal.gjones_ampl_clipping,
-                "Gjones-ampl-clipping-low"  :   cfg.selfcal.gjones_ampl_clipping_low,
-                "Gjones-ampl-clipping-high"  :   cfg.selfcal.gjones_ampl_clipping_high,
+                "Ejones"    :   cfg.selfcal0.ejones,
+                "beam-files-pattern" : cfg.selfcal0.beam_files_pattern,
+                "beam-l-axis" : cfg.selfcal0.beam_l_axis,
+                "beam-m-axis" : cfg.selfcal0.beam_m_axis,
+                "Gjones-ampl-clipping"  :   cfg.selfcal0.gjones_ampl_clipping,
+                "Gjones-ampl-clipping-low"  :   cfg.selfcal0.gjones_ampl_clipping_low,
+                "Gjones-ampl-clipping-high"  :   cfg.selfcal0.gjones_ampl_clipping_high,
+                "Gjones-matrix-type" : cfg.selfcal0.gjones_matrix_type,
+                "make-plots" : True
             },
             input=INPUT, output=OUTPUT,
             label="SELFCAL0_%d:: Calibrate and subtract LSM0" % target_field)
 
-        #make another mfs image
-        imname_prefix = cfg.obs.basename + "_SC0_" + plot_name[target.name]
-        recipe.add("cab/wsclean", "wsclean_SC0_%d" % target_field,
-            {
-                "msname"            : cfg.obs.msfile,
-                "column"            : cfg.wsclean_selfcal.column,
-                "weight"            : "briggs %2.f"%(cfg.wsclean_selfcal.robust),
-                "npix"              : cfg.obs.im_npix,
-                "cellsize"          : cfg.obs.angular_resolution*cfg.obs.sampling,
-                "clean_iterations"  : cfg.wsclean_selfcal.clean_iterations,
-                "mgain"             : cfg.wsclean_selfcal.mgain,
-                "channelsout"       : cfg.obs.im_numchans,
-                "joinchannels"      : cfg.wsclean_selfcal.joinchannels,
-                "field"             : str(target_field),
-                "name"              : imname_prefix,
-            },
-            input=INPUT, output=OUTPUT,
-            label="image_SC0_%d::wsclean" % target_field)
+        # Move the current flags to a new flag set in prep for next selfcal
+        # round
+        # recipe.add("cab/flagms", "backup_sc0_flags",
+        #     {
+        #         "msname"        : cfg.obs.msfile,
+        #         "flagged-any"   : cfg.flagset_saveas_legacy.flagged_any,
+        #         "flag"          : cfg.flagset_saveas_legacy.flag,
+        #     },
+        #     input=INPUT,   output=OUTPUT,
+        #     label="flagset_selfcal0_flags:: Backup selfcal flags")
 
-        #create a mask for this round of selfcal
-        imname_mfs = imname_prefix + "-MFS-image.fits"
-        maskname = imname_prefix + "_MASK"
+        # create a mask for this round of selfcal
+        maskname = imname_prefix + "_MASK.fits"
         recipe.add("cab/cleanmask", "make_clean_mask",
             {
                 "image"     :   '%s:output'%imname_mfs,
                 "output"    :   maskname,
-                "sigma"     :   cfg.cleanmask.sigma,
-                "iters"     :   cfg.cleanmask.iters,
-                "boxes"    :   cfg.cleanmask.kernel,
+                "sigma"     :   cfg.cleanmask0.sigma,
+                "iters"     :   cfg.cleanmask0.iters,
+                "boxes"    :   cfg.cleanmask0.kernel,
             },
             input=INPUT, output=OUTPUT,
             label="MSK_SC0_%d::Make clean mask" % target_field)
+
+        # make another mfs image
+        imname_prefix = cfg.obs.basename + "_SC0_" + plot_name[target.name]
+        imname_mfs = imname_prefix + "-MFS-image.fits"
+        recipe.add("cab/wsclean", "wsclean_SC0_%d" % target_field,
+            {
+                "msname"            : cfg.obs.msfile,
+                "column"            : cfg.wsclean_selfcal0.column,
+                "weight"            : "briggs %2.f"%(cfg.wsclean_selfcal0.robust),
+                "npix"              : cfg.obs.im_npix,
+                "cellsize"          : cfg.obs.angular_resolution*cfg.obs.sampling,
+                "clean_iterations"  : cfg.wsclean_selfcal0.clean_iterations,
+                "mgain"             : cfg.wsclean_selfcal0.mgain,
+                "channelsout"       : cfg.obs.im_numchans,
+                "joinchannels"      : cfg.wsclean_selfcal0.joinchannels,
+                "field"             : str(target_field),
+                "name"              : imname_prefix,
+                "fitsmask"          : '%s:output' % maskname,
+                "auto-threshold"    : cfg.wsclean_selfcal0.autothreshold,
+            },
+            input=INPUT, output=OUTPUT,
+            label="image_SC0_%d::wsclean" % target_field)
+
+        # full restore into the mfs
+        imname_mfs_fullrest = imname_prefix + "-MFS-image.full_restore.fits"
+        recipe.add("cab/tigger_restore", "full_restore_SC0_%d" % target_field,
+            {
+                "input-image"       : "%s:output" % imname_mfs,
+                "input-skymodel"    : "%s:output" % model_name,
+                "output-image"      : '%s:output' % imname_mfs_fullrest,
+                "freq"              : cfg.obs.freq_0,
+            },
+            input=INPUT, output=OUTPUT,
+            label="fullrestore_SC0_%d::tigger_restore" % target_field)
+
+    # Initial selfcal loop
+    phase_2gc = ["prepms",
+                 "move_corrdata_to_data",
+                ]
+    for target_field in target_fields:
+        phase_2gc += ["source_find0_%d" % target_field,
+                      "stitch_cube0_%d" % target_field,
+                      "SPI0_%d" % target_field,
+                      "SELFCAL0_%d" % target_field,
+                      "MSK_SC0_%d" % target_field,
+                      "image_SC0_%d" % target_field,
+                      "fullrestore_SC0_%d" % target_field,
+                     ]
+
+    recipe.run(phase_2gc)
+
+    #########################################################################
+    #
+    # Phase Amplitude self calibration (2nd gen)
+    #
+    # After most of the significant phase error has been corrected
+    # we should be able to clean deeper, so rerun this time with amplitude
+    #########################################################################
+    recipe = stimela.Recipe("Phase amplitude 2GC Pipeline", ms_dir=MSDIR)
+
+    # Initial selfcal loop
+    for target_field, target in zip(target_fields, targets):
+        # Extract sources in mfs clean image to build initial sky model
+        imname_prefix = cfg.obs.basename + "_SC0_" + plot_name[target.name]
+        imname_mfs = imname_prefix + "-MFS-image.fits"
+
+        # Construct LSM from sky cleaned after first SC subtraction
+        old_model_prefix = cfg.obs.basename + "_LSM0_" + plot_name[target.name]
+        old_model_name = old_model_prefix + ".lsm.html"
+        model_prefix = cfg.obs.basename + "_LSM1_" + plot_name[target.name]
+        model_name = model_prefix + ".lsm.html"
+        model_master = cfg.obs.basename + \
+                       "_LSM_concatenated_" + \
+                       plot_name[target.name] + \
+                       ".lsm.html"
+        recipe.add("cab/pybdsm", "extract_sources_%d" % target_field,
+            {
+                "image"         : "%s:output"%imname_mfs,
+                "outfile"       : model_prefix+".fits",
+                "thresh_pix"    : cfg.source_find1.thresh_pix,
+                "thresh_isl"    : cfg.source_find1.thresh_isl,
+                "port2tigger"   :   True,
+            },
+            input=INPUT, output=OUTPUT,
+            label="source_find1_%d:: Extract sources from previous round of cal" % target_field)
+
+        # Stitch wsclean channel images of the previous run into a cube
+        cubename = cfg.obs.basename + "_SC0_" + plot_name[target.name] + "-CLEAN_cube.fits"
+        recipe.add("cab/fitstool", "fitstool",
+            {
+                "image"     : [ '%s-%04d-image.fits:output'%(imname_prefix, a) for a in range(cfg.obs.im_numchans) ],
+                "output"    : cubename,
+                "stack"     : True,
+                "fits-axis" : 3,
+            },
+            input=INPUT, output=OUTPUT,
+            label="stitch_cube1_%d:: Stitch MFS image slices into a cube" % target_field)
+
+        # Add SPIs
+        recipe.add("cab/specfit", "add_SPIs_LSM0",
+            {
+                "image"                 :   "%s:output"%cubename,
+                "output-spi-image"      :   "%s-spi.fits"%imname_prefix,
+                "output-spi-error-image":   "%s-spi.error.fits"%imname_prefix,
+                "input-skymodel"        :   "%s:output"%model_name, # model to which SPIs must be added
+                "output-skymodel"       :   model_name,
+                "tolerance-range"       :   cfg.specfit1.tol,
+                "freq0"                 :   cfg.obs.freq_0,    # reference frequency for SPI calculation
+                "sigma-level"           :   cfg.specfit1.sigma,
+            },
+            input=INPUT, output=OUTPUT,
+            label="SPI1_%d::Add SPIs to LSM" % target_field)
+
+        # Stitch LSM 0 and LSM 1 together into a master LSM file from which
+        # we can do prediction for selfcal
+        recipe.add("cab/tigger_convert", "stitch_LSM0_LSM1",
+            {
+                "input-skymodel"        :   "%s:output" % old_model_name,
+                "output-skymodel"       :   "%s:output" % model_master,
+                "append"                :   "%s:output" % model_name,
+            },
+            input=INPUT, output=OUTPUT,
+            label="stitch_lsms1_%d::Create master lsm file from SC0 and SC1" %
+                   target_field )
+
+        # Selfcal and subtract brightest sources
+        recipe.add("cab/calibrator", "Initial_Gjones_subtract_LSM1",
+            {
+                "skymodel"  :   "%s:output" % model_master,
+                "label"     :   cfg.selfcal1.label,
+                "msname"    :   cfg.obs.msfile,
+                "threads"   :   cfg.selfcal1.ncpu,
+                "column"    :   cfg.selfcal1.column,
+                "output-data"    :   cfg.selfcal1.output,
+                "Gjones"    :   cfg.selfcal1.gjones,
+                "Gjones-solution-intervals" : [int(math.ceil(float(cfg.obs.gain_sol_int[:-1]))),
+                                               int(cfg.obs.nchans /
+                                                   float(100))],
+                "DDjones-smoothing-intervals" :  cfg.selfcal1.ddjones_smoothing,
+                # TODO: MeerKAT beams need to go in this section
+                "Ejones"    :   cfg.selfcal1.ejones,
+                "beam-files-pattern" : cfg.selfcal1.beam_files_pattern,
+                "beam-l-axis" : cfg.selfcal1.beam_l_axis,
+                "beam-m-axis" : cfg.selfcal1.beam_m_axis,
+                "Gjones-ampl-clipping"  :   cfg.selfcal1.gjones_ampl_clipping,
+                "Gjones-ampl-clipping-low"  :   cfg.selfcal1.gjones_ampl_clipping_low,
+                "Gjones-ampl-clipping-high"  :   cfg.selfcal1.gjones_ampl_clipping_high,
+                "Gjones-matrix-type" : cfg.selfcal1.gjones_matrix_type,
+                "make-plots" : True
+            },
+            input=INPUT, output=OUTPUT,
+            label="SELFCAL1_%d:: Calibrate and subtract LSM0" % target_field)
+        # Move the current flags to a new flag set in prep for next selfcal
+        # round
+        # recipe.add("cab/flagms", "backup_sc0_flags",
+        #     {
+        #         "msname"        : cfg.obs.msfile,
+        #         "flagged-any"   : cfg.flagset_saveas_legacy.flagged_any,
+        #         "flag"          : cfg.flagset_saveas_legacy.flag,
+        #     },
+        #     input=INPUT,   output=OUTPUT,
+        #     label="flagset_selfcal0_flags:: Backup selfcal flags")
+
+        # create a mask for this round of selfcal
+        maskname = imname_prefix + "_MASK.fits"
+        recipe.add("cab/cleanmask", "make_clean_mask",
+            {
+                "image"     :   '%s:output'%imname_mfs,
+                "output"    :   maskname,
+                "sigma"     :   cfg.cleanmask1.sigma,
+                "iters"     :   cfg.cleanmask1.iters,
+                "boxes"    :   cfg.cleanmask1.kernel,
+            },
+            input=INPUT, output=OUTPUT,
+            label="MSK_SC1_%d::Make clean mask" % target_field)
+
+        #make another mfs image
+        imname_prefix = cfg.obs.basename + "_SC1_" + plot_name[target.name]
+        recipe.add("cab/wsclean", "wsclean_SC1_%d" % target_field,
+            {
+                "msname"            : cfg.obs.msfile,
+                "column"            : cfg.wsclean_selfcal1.column,
+                "weight"            : "briggs %2.f"%(cfg.wsclean_selfcal1.robust),
+                "npix"              : cfg.obs.im_npix,
+                "cellsize"          : cfg.obs.angular_resolution*cfg.obs.sampling,
+                "clean_iterations"  : cfg.wsclean_selfcal1.clean_iterations,
+                "mgain"             : cfg.wsclean_selfcal1.mgain,
+                "channelsout"       : cfg.obs.im_numchans,
+                "joinchannels"      : cfg.wsclean_selfcal1.joinchannels,
+                "field"             : str(target_field),
+                "name"              : imname_prefix,
+                "fitsmask"          : '%s:output' % maskname,
+                "auto-threshold"    : cfg.wsclean_selfcal1.autothreshold,
+            },
+            input=INPUT, output=OUTPUT,
+            label="image_SC1_%d::wsclean" % target_field)
+
+        # full restore into the mfs
+        imname_mfs_fullrest = imname_prefix + "-MFS-image.full_restore.fits"
+        recipe.add("cab/tigger_restore", "full_restore_SC1_%d" % target_field,
+            {
+                "input-image"       : imname_mfs,
+                "input-skymodel"    : model_name,
+                "output-image"      : '%s:output' % imname_mfs_fullrest,
+                "freq"              : cfg.obs.freq_0,
+            },
+            input=INPUT, output=OUTPUT,
+            label="fullrestore_SC1_%d::tigger_restore" % target_field)
 
     for ti in targets:
         # Extract sources in mfs clean image to build initial sky model
@@ -989,19 +1283,19 @@ for obs_metadata in obs_metadatas:
               "V as diagnostic" % target_field)
 
     # Initial selfcal loop
-    init_2gc = ["prepms",
-                "move_corrdata_to_data",
-               ]
+    phaseamp_2gc = []
     for target_field in target_fields:
-        init_2gc += ["source_find_%d" % target_field,
-                     "stitch_cube_%d" % target_field,
-                     "SPI_%d" % target_field,
-                     "SELFCAL0_%d" % target_field,
-                     "image_SC0_%d" % target_field,
-                     "MSK_SC0_%d" % target_field,
-                    ]
+        phaseamp_2gc += ["source_find1_%d" % target_field,
+                         "stitch_cube1_%d" % target_field,
+                         "SPI1_%d" % target_field,
+                         "stitch_lsms1_%d" % target_field,
+                         "SELFCAL1_%d" % target_field,
+                         "MSK_SC1_%d" % target_field,
+                         "image_SC1_%d" % target_field,
+                         "fullrestore_SC1_%d" % target_field,
+                        ]
     # diagnostic only:
-    init_2gc += ["image_stokesv_residue_%d" % t for t in target_fields]
+    phaseamp_2gc += ["image_stokesv_residue_%d" % t for t in target_fields]
 
-    recipe.run(init_2gc)
+    recipe.run(phaseamp_2gc)
 

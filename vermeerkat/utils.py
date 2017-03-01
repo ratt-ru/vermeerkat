@@ -55,7 +55,7 @@ def merge_observation_metadata(cfg, obs_metadata):
         raise ValueErro('PSF sampling is > 1. Please check your config file.')
 
     obs.im_npix = int(obs.fov / obs.angular_resolution / obs.sampling)
-    obs.bw_per_image_slice = 100.0e6
+    obs.bw_per_image_slice = float(cfg.general.bw_per_mfs_slice)
     obs.im_numchans = int(np.ceil(obs_metadata["ChannelWidth"] * obs.nchans / obs.bw_per_image_slice))
 
 def load_scans(h5filename):
