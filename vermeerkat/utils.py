@@ -1,6 +1,9 @@
 import datetime
 from collections import defaultdict
 import os
+import pytz
+import datetime
+import calendar
 
 import numpy as np
 import katdal
@@ -23,11 +26,16 @@ def merge_observation_metadata(cfg, obs_metadata):
     obs.msfile = ''.join((obs.basename, '.ms'))
 
     # Calibrator tables
-    obs.delaycal_table = "%s.K0:output" % obs.basename
-    obs.phasecal_table = "%s.G0:output" % obs.basename
-    obs.ampcal_table = "%s.G1:output" % obs.basename
-    obs.fluxcal_table = "%s.fluxscale:output" % obs.basename
-    obs.bpasscal_table = "%s.B0:output" % obs.basename
+    obs.delaycal_table = "%s.1.1gc.K0:output" % obs.basename
+    obs.phasecal_table = "%s.1.1gc.G0:output" % obs.basename
+    obs.ampcal_table = "%s.1.1gc.G1:output" % obs.basename
+    obs.fluxcal_table = "%s.1.1gc.fluxscale:output" % obs.basename
+    obs.bpasscal_table = "%s.1.1gc.B0:output" % obs.basename
+    obs.post_mit_delaycal_table = "%s.1.2gc.K0:output" % obs.basename
+    obs.post_mit_phasecal_table = "%s.1.2gc.G0:output" % obs.basename
+    obs.post_mit_ampcal_table = "%s.1.2gc.G1:output" % obs.basename
+    obs.post_mit_fluxcal_table = "%s.1.2gc.fluxscale:output" % obs.basename
+    obs.post_mit_bpasscal_table = "%s.1.2gc.B0:output" % obs.basename
 
     #Observation properties
     obs.refant = str(obs_metadata["RefAntenna"])
@@ -47,7 +55,7 @@ def merge_observation_metadata(cfg, obs_metadata):
         raise ValueErro('PSF sampling is > 1. Please check your config file.')
 
     obs.im_npix = int(obs.fov / obs.angular_resolution / obs.sampling)
-    obs.bw_per_image_slice = 100.0e6
+    obs.bw_per_image_slice = float(cfg.general.bw_per_mfs_slice)
     obs.im_numchans = int(np.ceil(obs_metadata["ChannelWidth"] * obs.nchans / obs.bw_per_image_slice))
 
 def load_scans(h5filename):
@@ -62,6 +70,15 @@ def load_scans(h5filename):
     return [_modify_target(target, scan_index, d.timestamps[-1] - d.timestamps[0])
                                     for (scan_index, state, target) in d.scans()
                                     if state == "track"]
+
+def start_end_observation(h5filename):
+    d = katdal.open(h5filename)
+    local = pytz.timezone("Africa/Johannesburg")
+    start = local.localize(
+        datetime.datetime.fromtimestamp(d.timestamps[0])).astimezone(pytz.utc)
+    end = local.localize(
+        datetime.datetime.fromtimestamp(d.timestamps[-1])).astimezone(pytz.utc)
+    return start, end
 
 def fmt_seconds(seconds, format=None):
     """ Formats seconds into %Hh%Mm%Ss format """
@@ -123,10 +140,26 @@ def total_scan_times(field_scan_map, scan_targets):
     return [sum(s.scan_length for s in field_scan_map[st.name])
                                     for st in scan_targets]
 
-def select_gain_calibrator(cfg, targets, gaincals):
+def select_gain_calibrator(cfg,
+                           targets,
+                           gaincals,
+                           observation_start=None,
+                           scans=None,
+                           strategy="nearest"):
     """
-    Select index and gain calibrator closest to the mean centre
-    of the observation targets
+    Selects the gain calibrator
+    If this is specified through command line override user selection is used
+    otherwise the following strategies are available:
+        strategy=nearest:
+            Select index and gain calibrator closest to the mean centre
+            of the observation targets at the time of the start of 
+            the observation. Observation start time in datetime with
+            localle=UTC must be specified.
+        strategy=most_scans:
+            Use gain calibrator with most scans. The box standard 
+            observation approach is to flip between target and gain
+            calibrator during an observation, so this is a good indicator
+            of the gain calibrator to use.
     """
 
     default_gaincal = cfg.general.gain_calibrator
@@ -147,22 +180,39 @@ def select_gain_calibrator(cfg, targets, gaincals):
                             "gain calibrators '%s'" % (
                                 default_gaincal, gaincal_names))
 
-    # Compute mean target position.
-    # TODO: This assumes all targets are close to each other
-    mean_radec = np.mean([t.radec() for t in targets], axis=0)
+    elif strategy == "nearest":
+        vermeerkat.log.info("Using nearest to centre of all targets for gain "
+                            "calibrator selection")
+        if not isinstance(observation_start, datetime.datetime):
+            raise ValueError("Expected UTC observation_start datetime object")
+        # Compute mean target position.
+        # Assumption: This assumes all targets are close to each other
+        mean_radec = np.mean([t.radec() for t in targets], axis=0)
 
-    # TODO: Is this the correct antenna to use for separation
-    # below?
-    ant = targets[0].antenna
+        #angular distance on a sphere depends on latitude
+        ant = targets[0].antenna
 
-    # Create a fake katpoint target
-    mean_target = construct_radec_target(*mean_radec)
-
-    # Select gaincal candidate with least angular distance
-    # to mean target position
-    angular_distances = [mean_target.separation(g, antenna=ant)
-                                                for g in gaincals]
-    index = np.argmin(angular_distances)
+        # Create a fake katpoint target
+        mean_target = construct_radec_target(*mean_radec)
+        # Select gaincal candidate with least angular distance
+        # to mean target position
+        unix_obs_start = calendar.timegm(observation_start.utctimetuple())
+        angular_distances = [mean_target.separation(g,
+                                                    timestamp=unix_obs_start,
+                                                    antenna=ant)
+                                                    for g in gaincals]
+        index = np.argmin(angular_distances)
+    elif strategy == "most_scans":
+        vermeerkat.log.info("Using most scans on calibrator for selection of "
+                            "gain calibrator")
+        if not isinstance(scans, list):
+            raise ValueError("Expected list of scans")
+        scan_map = create_field_scan_map(scans)
+        scan_count = [len(scan_map[g.name]) for g in gaincals]
+        index = np.argmax(scan_count)
+    else:
+        raise ValueError("Unknown heuristic for gain calibrator selection %s" %
+            strategy)
 
     return index, gaincals[index]
 
