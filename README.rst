@@ -19,6 +19,8 @@ Clone VerMeerKAT from github and install it in a virtual environment:
     $ git clone git@github.com:ska-sa/vermeerkat.git
     $ virtualenv ~/venv/vermeerkat
     $ source ~/venv/vermeerkat/bin/activate
+    (vermeerkat) $ pip install pip -U
+    (vermeerkat) $ pip install setuptools -U
     (vermeerkat) $ pip install /src/vermeerkat
 
 VerMeerKAT depends on stimela_, which uses radio astronomy packages
