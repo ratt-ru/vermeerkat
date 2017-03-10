@@ -493,6 +493,17 @@ for obs_metadata in obs_metadatas:
         input=INPUT, output=OUTPUT,
         label="applycal:: Apply calibration solutions to target")
 
+    #Go initial 1GC and further flagging
+    init_1gc = [ "setjy",
+                 "delaycal",
+                 "phase0",
+                 "bandpass",
+                 "gaincal",
+                 "fluxscale",
+                 "applycal"]
+    recipe.run(init_1gc)
+
+    recipe = stimela.Recipe("Post 1.1GC Flagging Engine", ms_dir=MSDIR)
     # Lets try squash the last of the RFI with the autoflagger
     # TODO: the strategy used here may still need some fine tuning
     # Think we should make it a bit more aggressive
@@ -512,31 +523,28 @@ for obs_metadata in obs_metadatas:
     # to spec
     recipe.add("cab/politsiyakat", "flag_malfunctioning_antennas",
         {
-            "task"                   : cfg.flag_baseline_phases.task,
+            "task"                   : cfg.flag_phases_amplitudes.task,
             "msname"                 : cfg.obs.msfile,
-            "data_column"            : cfg.flag_baseline_phases.data_column,
-            "cal_field"              : str(bpcal_field),
-            "valid_phase_range"      : cfg.flag_baseline_phases.valid_phase_range,
-            "max_invalid_datapoints" : cfg.flag_baseline_phases.max_invalid_datapoints,
+            "data_column"            : cfg.flag_phases_amplitudes.data_column,
+            "field"                  : ",".join(str(f) for f in target_fields +
+                                                                [bpcal_field,
+                                                                 gaincal_field]),
+            "cal_field"              : ",".join(str(f) for f in [bpcal_field,
+                                                                 gaincal_field]),
+            "phase_range_clip"       : cfg.flag_phases_amplitudes.valid_phase_range,
+            "invalid_count_frac_clip" : cfg.flag_phases_amplitudes.max_invalid_datapoints,
+            "amp_frac_clip"          : cfg.flag_phases_amplitudes.amp_frac_clip,
             "output_dir"             : "",
-            "nrows_chunk"            : cfg.flag_baseline_phases.nrows_chunk,
-            "simulate"               : cfg.flag_baseline_phases.simulate,
+            "nrows_chunk"            : cfg.flag_phases_amplitudes.nrows_chunk,
+            "simulate"               : cfg.flag_phases_amplitudes.simulate,
+            "nthreads"               : cfg.flag_phases_amplitudes.nthreads,
         },
         input=INPUT, output=OUTPUT,
         label="flag_baseline_phases_bp:: Flag baselines based on calibrator phases")
 
-    #Go initial 1GC and further flagging
-    init_1gc = [ "setjy",
-                 "delaycal",
-                 "phase0",
-                 "bandpass",
-                 "gaincal",
-                 "fluxscale",
-                 "applycal",
-                 "autoflag_corrected_vis",
-                 "flag_baseline_phases_bp"
-               ]
-    recipe.run(init_1gc)
+    post_1gc_flagging = [ "autoflag_corrected_vis",
+                          "flag_baseline_phases_bp"]
+    recipe.run(post_1gc_flagging)
 
     #########################################################################
     #
@@ -889,7 +897,6 @@ for obs_metadata in obs_metadatas:
                         "plot_amp_freq_gc",
                         "plot_phase_time_gc",
                         "plot_phase_freq_gc",
-
                       ]
     diagnostics_1gc += ["image_bandpass", "image_gain"] # diagnostic only
     recipe.run(diagnostics_1gc)
@@ -1019,7 +1026,8 @@ for obs_metadata in obs_metadatas:
                 "Gjones-ampl-clipping-low"  :   cfg.selfcal0.gjones_ampl_clipping_low,
                 "Gjones-ampl-clipping-high"  :   cfg.selfcal0.gjones_ampl_clipping_high,
                 "Gjones-matrix-type" : cfg.selfcal0.gjones_matrix_type,
-                "make-plots" : True
+                "make-plots" : True,
+                "field-id" : target_field
             },
             input=INPUT, output=OUTPUT,
             label="SELFCAL0_%d:: Calibrate and subtract LSM0" % target_field)
@@ -1195,7 +1203,8 @@ for obs_metadata in obs_metadatas:
                 "Gjones-ampl-clipping-low"  :   cfg.selfcal1.gjones_ampl_clipping_low,
                 "Gjones-ampl-clipping-high"  :   cfg.selfcal1.gjones_ampl_clipping_high,
                 "Gjones-matrix-type" : cfg.selfcal1.gjones_matrix_type,
-                "make-plots" : True
+                "make-plots" : True,
+                "field-id" : target_field
             },
             input=INPUT, output=OUTPUT,
             label="SELFCAL1_%d:: Calibrate and subtract LSM0" % target_field)
