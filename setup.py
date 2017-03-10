@@ -55,7 +55,7 @@ setup(name=PACKAGE_NAME,
     version=get_version(),
     description='MeerKAT Imaging Pipeline',
     long_description=readme(),
-    url='http://github.com/SpheMakh/VerMeerKAT',
+    url='http://github.com/ska-sa/vermeerkat',
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Developers",
@@ -75,13 +75,10 @@ setup(name=PACKAGE_NAME,
         'pysolr >= 3.6.0',
         'requests >= 2.12.1',
         'ruamel.yaml >= 0.13.7',
-        'stimela >= 0.2.0', # Force install of master branch
+        'stimela == 0.2.7',
         'katdal >= 0.7',
         'numpy >= 1.11.2',
         'scipy >= 0.7.0',
-    ],
-    dependency_links=[
-        'https://github.com/SpheMakh/Stimela/tarball/master#egg=stimela-0.2.0'
     ],
     package_data={ PACKAGE_NAME: 'conf/*.conf' },
     include_package_data=True,
