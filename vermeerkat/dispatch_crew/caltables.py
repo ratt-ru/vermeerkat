@@ -1,7 +1,7 @@
 import os
+from scipy.optimize import curve_fit
 
 import numpy as np
-from scipy.optimize import curve_fit
 
 __CALIBRATOR_DB = None
 
@@ -16,7 +16,7 @@ def calibrator_database():
 
     # OK its not loaded, read it in
     import vermeerkat
-    import vermeerkat.caltable_parser as vmcp
+    import vermeerkat.dispatch_helpers.caltable_parser as vmcp
 
     # There isn't a Southern standard in CASA
     # so construct a little database of them for reference
