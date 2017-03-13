@@ -22,8 +22,7 @@ import logging
 import os
 
 import vermeerkat
-import vermeerkat.config as vmc
-
+import vermeerkat.conf.config as vmc
 from version import __version__
 
 # Where is the module installed?
