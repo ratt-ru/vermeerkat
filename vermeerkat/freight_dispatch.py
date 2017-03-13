@@ -198,14 +198,16 @@ for obs_metadata in obs_metadatas:
     # Conversions and fixes
     #
     #########################################################################
-    converter_loco.launch(cfg, INPUT, MSDIR, OUTPUT)
+    if not cfg.obs.skip_conversion:
+        converter_loco.launch(cfg, INPUT, MSDIR, OUTPUT)
 
     #########################################################################
     #
     # Preliminary RFI, band and autocorr flagging
     #
     #########################################################################
-    flagging_loco.launch(cfg, INPUT, MSDIR, OUTPUT)
+    if not cfg.obs.skip_rfi_flagging:
+        flagging_loco.launch(cfg, INPUT, MSDIR, OUTPUT)
 
     #########################################################################
     #
@@ -216,18 +218,19 @@ for obs_metadata in obs_metadatas:
     # did mitigation flagging and generate, hopefully, improved 1GC
     # solutions
     #########################################################################
-    init_casa_1gc_loco.launch(cfg, INPUT, MSDIR, OUTPUT,
-                              bandpass_cal=bandpass_cal,
-                              calibrator_db=calibrator_db,
-                              bpcal_field=bpcal_field,
-                              gaincal_field=gaincal_field,
-                              bpcal_sol_int=bpcal_sol_int,
-                              target_fields=target_fields)
-
-    postcal_flagging_loco.launch(cfg, INPUT, MSDIR, OUTPUT,
-                                 bpcal_field=bpcal_field,
-                                 gaincal_field=gaincal_field,
-                                 target_fields=target_fields)
+    if not cfg.obs.skip_initial_1gc:
+        init_casa_1gc_loco.launch(cfg, INPUT, MSDIR, OUTPUT,
+                                  bandpass_cal=bandpass_cal,
+                                  calibrator_db=calibrator_db,
+                                  bpcal_field=bpcal_field,
+                                  gaincal_field=gaincal_field,
+                                  bpcal_sol_int=bpcal_sol_int,
+                                  target_fields=target_fields)
+    if not cfg.obs.skip_secondpass_flagging:
+        postcal_flagging_loco.launch(cfg, INPUT, MSDIR, OUTPUT,
+                                     bpcal_field=bpcal_field,
+                                     gaincal_field=gaincal_field,
+                                     target_fields=target_fields)
 
     #########################################################################
     #
@@ -240,13 +243,14 @@ for obs_metadata in obs_metadatas:
     # to significant flagging we can skip and use the corrected data
     # as is.
     #########################################################################
-    secondpass_casa_1gc_loco.launch(cfg, INPUT, MSDIR, OUTPUT,
-                                    bandpass_cal=bandpass_cal,
-                                    calibrator_db=calibrator_db,
-                                    bpcal_field=bpcal_field,
-                                    gaincal_field=gaincal_field,
-                                    bpcal_sol_int=bpcal_sol_int,
-                                    target_fields=target_fields)
+    if not cfg.obs.skip_1gc_recalibration:
+        secondpass_casa_1gc_loco.launch(cfg, INPUT, MSDIR, OUTPUT,
+                                        bandpass_cal=bandpass_cal,
+                                        calibrator_db=calibrator_db,
+                                        bpcal_field=bpcal_field,
+                                        gaincal_field=gaincal_field,
+                                        bpcal_sol_int=bpcal_sol_int,
+                                        target_fields=target_fields)
 
     #########################################################################
     #
@@ -254,34 +258,38 @@ for obs_metadata in obs_metadatas:
     #
     # With our best solutions in hand we plot some results for the observer
     #########################################################################
-    post_1gc_diagnostics_loco.launch(cfg, INPUT, MSDIR, OUTPUT,
-                                     bandpass_cal=bandpass_cal,
-                                     bpcal_field=bpcal_field,
-                                     gaincal_field=gaincal_field)
+    if not cfg.obs.skip_1gc_diagnostics:
+        post_1gc_diagnostics_loco.launch(cfg, INPUT, MSDIR, OUTPUT,
+                                         bandpass_cal=bandpass_cal,
+                                         bpcal_field=bpcal_field,
+                                         gaincal_field=gaincal_field)
 
     #########################################################################
     #
     # Post 1GC imaging
     #
     #########################################################################
-    post_1gc_imaging_loco.launch(cfg, INPUT, MSDIR, OUTPUT,
-                                 targets=targets,
-                                 field_index=field_index,
-                                 target_fields=target_fields)
+    if not cfg.obs.skip_1gc_imaging:
+        post_1gc_imaging_loco.launch(cfg, INPUT, MSDIR, OUTPUT,
+                                     targets=targets,
+                                     field_index=field_index,
+                                     target_fields=target_fields)
 
     #########################################################################
     #
     # Phase only self calibration (2nd gen)
     #
     #########################################################################
-    phase_selfcal_loco.launch(cfg, INPUT, MSDIR, OUTPUT,
-                              plot_name=plot_name,
-                              targets=targets,
-                              target_fields=target_fields)
-    post_p_selfcal_imaging_loco.launch(cfg, INPUT, MSDIR, OUTPUT,
-                                       targets=targets,
-                                       field_index=field_index,
-                                       target_fields=target_fields)
+    if not cfg.obs.skip_phaseonly_selfcal:
+        phase_selfcal_loco.launch(cfg, INPUT, MSDIR, OUTPUT,
+                                  plot_name=plot_name,
+                                  targets=targets,
+                                  target_fields=target_fields)
+    if not cfg.obs.skip_phaseonly_selfcal_imaging:
+        post_p_selfcal_imaging_loco.launch(cfg, INPUT, MSDIR, OUTPUT,
+                                           targets=targets,
+                                           field_index=field_index,
+                                           target_fields=target_fields)
 
     #########################################################################
     #
@@ -290,12 +298,14 @@ for obs_metadata in obs_metadatas:
     # After most of the significant phase error has been corrected
     # we should be able to clean deeper, so rerun this time with amplitude
     #########################################################################
-    phaseamp_selfcal_loco.launch(cfg, INPUT, MSDIR, OUTPUT,
-                                 plot_name=plot_name,
-                                 targets=targets,
-                                 target_fields=target_fields)
-    post_ap_selfcal_imaging_loco.launch(cfg, INPUT, MSDIR, OUTPUT,
-                                        targets=targets,
-                                        field_index=field_index,
-                                        target_fields=target_fields)
+    if not cfg.obs.skip_ampphase_selfcal:
+        phaseamp_selfcal_loco.launch(cfg, INPUT, MSDIR, OUTPUT,
+                                     plot_name=plot_name,
+                                     targets=targets,
+                                     target_fields=target_fields)
+    if not cfg.obs.skip_ampphase_selfcal_imaging:
+        post_ap_selfcal_imaging_loco.launch(cfg, INPUT, MSDIR, OUTPUT,
+                                            targets=targets,
+                                            field_index=field_index,
+                                            target_fields=target_fields)
 

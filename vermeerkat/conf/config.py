@@ -73,6 +73,38 @@ def general_section_parser():
     parser.add_argument('-g', '--gain-calibrator',
         help="Imaging gain calibrator ")
 
+    parser.add_argument('--skip_conversion',
+                        help="Skip conversion step")
+
+    parser.add_argument('--skip_rfi_flagging',
+                        help="Skip rfi flagging step")
+
+    parser.add_argument('--skip_initial_1gc',
+                        help="Skip initial 1gc step")
+
+    parser.add_argument('--skip_secondpass_flagging',
+                        help="Skip second pass RFI and mitigation flagging")
+
+    parser.add_argument('--skip_1gc_recalibration',
+                        help="Skip 1gc recalibration")
+
+    parser.add_argument('--skip_1gc_diagnostics',
+                        help="Skip 1gc diagnostic plotting")
+
+    parser.add_argument('--skip_1gc_imaging',
+                        help="Skip creation of 1gc image")
+
+    parser.add_argument('--skip_phaseonly_selfcal',
+                        help="Skip phaseonly_selfcal")
+
+    parser.add_argument('--skip_phaseonly_selfcal_imaging',
+                        help="Skip phaseonly_selfcal imaging")
+
+    parser.add_argument('--skip_ampphase_selfcal',
+                        help="Skip amplitude and phase selfcal")
+
+    parser.add_argument('--skip_ampphase_selfcal_imaging',
+                        help="Skip amplitude and phase selfcal imaging")
     return parser
 
 # Dictionary of argument parsers for particular sections
