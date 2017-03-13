@@ -28,7 +28,7 @@ from version import __version__
 # Where is the module installed?
 __install_path = os.path.split(os.path.abspath(vermeerkat.__file__))[0]
 
-__stimela_script_path = os.path.join(__install_path, 'stimela_script.py')
+__stimela_script_path = os.path.join(__install_path, 'freight_dispatch.py')
 
 def create_logger():
     """ Create a console logger """

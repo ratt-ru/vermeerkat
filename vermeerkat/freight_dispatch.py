@@ -23,9 +23,9 @@ import stimela
 
 import vermeerkat
 import vermeerkat.conf.config as vmc
-import vermeerkat.dispatch_helpers.caltables as vmct
-import vermeerkat.dispatch_helpers.observation as vmo
-import vermeerkat.dispatch_helpers.utils as vmu
+import vermeerkat.dispatch_crew.caltables as vmct
+import vermeerkat.dispatch_crew.observation as vmo
+import vermeerkat.dispatch_crew.utils as vmu
 from vermeerkat.locomotives import converter_loco, \
                                    flagging_loco, \
                                    init_casa_1gc_loco, \
@@ -198,7 +198,7 @@ for obs_metadata in obs_metadatas:
     # Conversions and fixes
     #
     #########################################################################
-    if not cfg.obs.skip_conversion:
+    if not hasattr(cfg.obs, "skip_conversion"):
         converter_loco.launch(cfg, INPUT, MSDIR, OUTPUT)
 
     #########################################################################
@@ -206,7 +206,7 @@ for obs_metadata in obs_metadatas:
     # Preliminary RFI, band and autocorr flagging
     #
     #########################################################################
-    if not cfg.obs.skip_rfi_flagging:
+    if not hasattr(cfg.obs, "skip_rfi_flagging"):
         flagging_loco.launch(cfg, INPUT, MSDIR, OUTPUT)
 
     #########################################################################
@@ -218,7 +218,7 @@ for obs_metadata in obs_metadatas:
     # did mitigation flagging and generate, hopefully, improved 1GC
     # solutions
     #########################################################################
-    if not cfg.obs.skip_initial_1gc:
+    if not hasattr(cfg.obs, "skip_initial_1gc"):
         init_casa_1gc_loco.launch(cfg, INPUT, MSDIR, OUTPUT,
                                   bandpass_cal=bandpass_cal,
                                   calibrator_db=calibrator_db,
@@ -226,7 +226,7 @@ for obs_metadata in obs_metadatas:
                                   gaincal_field=gaincal_field,
                                   bpcal_sol_int=bpcal_sol_int,
                                   target_fields=target_fields)
-    if not cfg.obs.skip_secondpass_flagging:
+    if not hasattr(cfg.obs, "skip_secondpass_flagging"):
         postcal_flagging_loco.launch(cfg, INPUT, MSDIR, OUTPUT,
                                      bpcal_field=bpcal_field,
                                      gaincal_field=gaincal_field,
@@ -243,7 +243,7 @@ for obs_metadata in obs_metadatas:
     # to significant flagging we can skip and use the corrected data
     # as is.
     #########################################################################
-    if not cfg.obs.skip_1gc_recalibration:
+    if not hasattr(cfg.obs, "skip_1gc_recalibration"):
         secondpass_casa_1gc_loco.launch(cfg, INPUT, MSDIR, OUTPUT,
                                         bandpass_cal=bandpass_cal,
                                         calibrator_db=calibrator_db,
@@ -258,7 +258,7 @@ for obs_metadata in obs_metadatas:
     #
     # With our best solutions in hand we plot some results for the observer
     #########################################################################
-    if not cfg.obs.skip_1gc_diagnostics:
+    if not hasattr(cfg.obs, "skip_1gc_diagnostics"):
         post_1gc_diagnostics_loco.launch(cfg, INPUT, MSDIR, OUTPUT,
                                          bandpass_cal=bandpass_cal,
                                          bpcal_field=bpcal_field,
@@ -269,7 +269,7 @@ for obs_metadata in obs_metadatas:
     # Post 1GC imaging
     #
     #########################################################################
-    if not cfg.obs.skip_1gc_imaging:
+    if not hasattr(cfg.obs, "skip_1gc_imaging"):
         post_1gc_imaging_loco.launch(cfg, INPUT, MSDIR, OUTPUT,
                                      targets=targets,
                                      field_index=field_index,
@@ -280,12 +280,12 @@ for obs_metadata in obs_metadatas:
     # Phase only self calibration (2nd gen)
     #
     #########################################################################
-    if not cfg.obs.skip_phaseonly_selfcal:
+    if not hasattr(cfg.obs, "skip_phaseonly_selfcal"):
         phase_selfcal_loco.launch(cfg, INPUT, MSDIR, OUTPUT,
                                   plot_name=plot_name,
                                   targets=targets,
                                   target_fields=target_fields)
-    if not cfg.obs.skip_phaseonly_selfcal_imaging:
+    if not hasattr(cfg.obs, "skip_phaseonly_selfcal_imaging"):
         post_p_selfcal_imaging_loco.launch(cfg, INPUT, MSDIR, OUTPUT,
                                            targets=targets,
                                            field_index=field_index,
@@ -298,12 +298,12 @@ for obs_metadata in obs_metadatas:
     # After most of the significant phase error has been corrected
     # we should be able to clean deeper, so rerun this time with amplitude
     #########################################################################
-    if not cfg.obs.skip_ampphase_selfcal:
+    if not hasattr(cfg.obs, "skip_ampphase_selfcal"):
         phaseamp_selfcal_loco.launch(cfg, INPUT, MSDIR, OUTPUT,
                                      plot_name=plot_name,
                                      targets=targets,
                                      target_fields=target_fields)
-    if not cfg.obs.skip_ampphase_selfcal_imaging:
+    if not hasattr(cfg.obs, "skip_ampphase_selfcal_imaging"):
         post_ap_selfcal_imaging_loco.launch(cfg, INPUT, MSDIR, OUTPUT,
                                             targets=targets,
                                             field_index=field_index,

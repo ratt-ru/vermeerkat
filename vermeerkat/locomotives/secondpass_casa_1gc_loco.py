@@ -19,7 +19,7 @@
 import stimela
 
 import vermeerkat
-import vermeerkat.dispatch_helpers.caltables as vmct
+import vermeerkat.dispatch_crew.caltables as vmct
 
 
 def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):

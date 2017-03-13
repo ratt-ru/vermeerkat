@@ -16,13 +16,13 @@ def calibrator_database():
 
     # OK its not loaded, read it in
     import vermeerkat
-    import vermeerkat.dispatch_helpers.caltable_parser as vmcp
+    import vermeerkat.dispatch_crew.caltable_parser as vmcp
 
     # There isn't a Southern standard in CASA
     # so construct a little database of them for reference
     vermeerkat.log.info("Parsing calibrator table")
 
-    ref_table = os.path.join(vermeerkat.install_path(), "southern_calibrators.txt")
+    ref_table = os.path.join(vermeerkat.install_path(), "data/southern_calibrators.txt")
     __CALIBRATOR_DB = vmcp.read_caltable(ref_table)
 
     vermeerkat.log.info("Found the following reference calibrators (in GHz format):")

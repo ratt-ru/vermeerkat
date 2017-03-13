@@ -8,7 +8,7 @@ from astropy.io import fits
 from matplotlib import pyplot as plt
 
 import vermeerkat
-from vermeerkat.dispatch_helpers.caltable_parser import read_caltable
+from vermeerkat.dispatch_crew.caltable_parser import read_caltable
 
 ref_table = os.path.dirname(
         os.path.abspath(vermeerkat.__file__)) + "/southern_calibrators.txt"

@@ -57,7 +57,7 @@ def is_valid_file(parser, arg):
 
 def general_section_parser():
     """ Parses the general section """
-    parser = argparse.ArgumentParser("General Section")
+    parser = argparse.ArgumentParser("General Section", add_help=False)
 
     # Solr server URL
     parser.add_argument('-s', '--solr-url',
@@ -74,37 +74,60 @@ def general_section_parser():
         help="Imaging gain calibrator ")
 
     parser.add_argument('--skip_conversion',
-                        help="Skip conversion step")
+                        help="Skip conversion step",
+                        action="store_true",
+                        default=False)
 
     parser.add_argument('--skip_rfi_flagging',
-                        help="Skip rfi flagging step")
+                        help="Skip rfi flagging step",
+                        action="store_true",
+                        default=False)
 
     parser.add_argument('--skip_initial_1gc',
-                        help="Skip initial 1gc step")
+                        help="Skip initial 1gc step",
+                        action="store_true",
+                        default=False)
 
     parser.add_argument('--skip_secondpass_flagging',
-                        help="Skip second pass RFI and mitigation flagging")
+                        help="Skip second pass RFI and mitigation flagging",
+                        action="store_true",
+                        default=False)
 
     parser.add_argument('--skip_1gc_recalibration',
-                        help="Skip 1gc recalibration")
+                        help="Skip 1gc recalibration",
+                        action="store_true",
+                        default=False)
 
     parser.add_argument('--skip_1gc_diagnostics',
-                        help="Skip 1gc diagnostic plotting")
+                        help="Skip 1gc diagnostic plotting",
+                        action="store_true",
+                        default=False)
 
     parser.add_argument('--skip_1gc_imaging',
-                        help="Skip creation of 1gc image")
+                        help="Skip creation of 1gc image",
+                        action="store_true",
+                        default=False)
 
     parser.add_argument('--skip_phaseonly_selfcal',
-                        help="Skip phaseonly_selfcal")
+                        help="Skip phaseonly_selfcal",
+                        action="store_true",
+                        default=False)
 
     parser.add_argument('--skip_phaseonly_selfcal_imaging',
-                        help="Skip phaseonly_selfcal imaging")
+                        help="Skip phaseonly_selfcal imaging",
+                        action="store_true",
+                        default=False)
 
     parser.add_argument('--skip_ampphase_selfcal',
-                        help="Skip amplitude and phase selfcal")
+                        help="Skip amplitude and phase selfcal",
+                        action="store_true",
+                        default=False)
 
     parser.add_argument('--skip_ampphase_selfcal_imaging',
-                        help="Skip amplitude and phase selfcal imaging")
+                        help="Skip amplitude and phase selfcal imaging",
+                        action="store_true",
+                        default=False)
+
     return parser
 
 # Dictionary of argument parsers for particular sections
@@ -134,7 +157,7 @@ def configuration(args=None):
             'conf', 'default.conf'),)
 
     # Parse configuration file arguments, if any
-    args, remaining_args = parser.parse_known_args(args)
+    args, remaining_args = parser.parse_known_args()
 
     # Lambda for transforming sections and options
     xformer = lambda s: s.lower().replace('-', '_')
