@@ -59,8 +59,8 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
             "nthreads"               : cfg.flag_phases_amplitudes.nthreads,
         },
         input=INPUT, output=OUTPUT,
-        label="flag_baseline_phases_bp:: Flag baselines based on calibrator phases")
+        label="flag_malfunctioning_antennas:: Flag baselines based on calibrator phases")
 
     post_1gc_flagging = [ "autoflag_corrected_vis",
-                          "flag_baseline_phases_bp"]
+                          "flag_phases_amplitudes"]
     recipe.run(post_1gc_flagging)

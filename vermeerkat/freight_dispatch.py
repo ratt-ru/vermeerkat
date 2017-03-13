@@ -34,7 +34,9 @@ from vermeerkat.locomotives import converter_loco, \
                                    post_1gc_diagnostics_loco, \
                                    post_1gc_imaging_loco, \
                                    phase_selfcal_loco, \
-                                   phaseamp_selfcal_loco
+                                   phaseamp_selfcal_loco, \
+                                   post_p_selfcal_imaging_loco, \
+                                   post_ap_selfcal_imaging_loco
 
 # So that we can access GLOBALS pass through to the run command
 stimela.register_globals()
@@ -276,6 +278,10 @@ for obs_metadata in obs_metadatas:
                               plot_name=plot_name,
                               targets=targets,
                               target_fields=target_fields)
+    post_p_selfcal_imaging_loco.launch(cfg, INPUT, MSDIR, OUTPUT,
+                                       targets=targets,
+                                       field_index=field_index,
+                                       target_fields=target_fields)
 
     #########################################################################
     #
@@ -288,4 +294,8 @@ for obs_metadata in obs_metadatas:
                                  plot_name=plot_name,
                                  targets=targets,
                                  target_fields=target_fields)
+    post_ap_selfcal_imaging_loco.launch(cfg, INPUT, MSDIR, OUTPUT,
+                                        targets=targets,
+                                        field_index=field_index,
+                                        target_fields=target_fields)
 

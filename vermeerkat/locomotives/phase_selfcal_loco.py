@@ -48,7 +48,7 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
     # Initial selfcal loop
     for target_field, target in zip(target_fields, targets):
         # Extract sources in mfs clean image to build initial sky model
-        imname_prefix = cfg.obs.basename + "_1GC_" + plot_name[target.name]
+        imname_prefix = cfg.obs.basename + "_1GC_3_" + plot_name[target.name]
         imname_mfs = imname_prefix + "-MFS-image.fits"
         model_prefix = cfg.obs.basename + "_LSM0_" + plot_name[target.name]
         model_name = model_prefix + ".lsm.html"
@@ -119,64 +119,6 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
                    input=INPUT, output=OUTPUT,
                    label="SELFCAL0_%d:: Calibrate and subtract LSM0" % target_field)
 
-        # Move the current flags to a new flag set in prep for next selfcal
-        # round
-        # recipe.add("cab/flagms", "backup_sc0_flags",
-        #     {
-        #         "msname"        : cfg.obs.msfile,
-        #         "flagged-any"   : cfg.flagset_saveas_legacy.flagged_any,
-        #         "flag"          : cfg.flagset_saveas_legacy.flag,
-        #     },
-        #     input=INPUT,   output=OUTPUT,
-        #     label="flagset_selfcal0_flags:: Backup selfcal flags")
-
-        # create a mask for this round of selfcal
-        maskname = imname_prefix + "_MASK.fits"
-        recipe.add("cab/cleanmask", "make_clean_mask",
-                   {
-                       "image": '%s:output' % imname_mfs,
-                       "output": maskname,
-                       "sigma": cfg.cleanmask0.sigma,
-                       "iters": cfg.cleanmask0.iters,
-                       "boxes": cfg.cleanmask0.kernel,
-                   },
-                   input=INPUT, output=OUTPUT,
-                   label="MSK_SC0_%d::Make clean mask" % target_field)
-
-        # make another mfs image
-        imname_prefix = cfg.obs.basename + "_SC0_" + plot_name[target.name]
-        imname_mfs = imname_prefix + "-MFS-image.fits"
-        recipe.add("cab/wsclean", "wsclean_SC0_%d" % target_field,
-                   {
-                       "msname": cfg.obs.msfile,
-                       "column": cfg.wsclean_selfcal0.column,
-                       "weight": "briggs %2.f" % (cfg.wsclean_selfcal0.robust),
-                       "npix": cfg.obs.im_npix,
-                       "cellsize": cfg.obs.angular_resolution * cfg.obs.sampling,
-                       "clean_iterations": cfg.wsclean_selfcal0.clean_iterations,
-                       "mgain": cfg.wsclean_selfcal0.mgain,
-                       "channelsout": cfg.obs.im_numchans,
-                       "joinchannels": cfg.wsclean_selfcal0.joinchannels,
-                       "field": str(target_field),
-                       "name": imname_prefix,
-                       "fitsmask": '%s:output' % maskname,
-                       "auto-threshold": cfg.wsclean_selfcal0.autothreshold,
-                   },
-                   input=INPUT, output=OUTPUT,
-                   label="image_SC0_%d::wsclean" % target_field)
-
-        # full restore into the mfs
-        imname_mfs_fullrest = imname_prefix + "-MFS-image.full_restore.fits"
-        recipe.add("cab/tigger_restore", "full_restore_SC0_%d" % target_field,
-                   {
-                       "input-image": "%s:output" % imname_mfs,
-                       "input-skymodel": "%s:output" % model_name,
-                       "output-image": '%s:output' % imname_mfs_fullrest,
-                       "freq": cfg.obs.freq_0,
-                   },
-                   input=INPUT, output=OUTPUT,
-                   label="fullrestore_SC0_%d::tigger_restore" % target_field)
-
     # Initial selfcal loop
     phase_2gc = ["prepms",
                  "move_corrdata_to_data",
@@ -185,10 +127,6 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
         phase_2gc += ["source_find0_%d" % target_field,
                       "stitch_cube0_%d" % target_field,
                       "SPI0_%d" % target_field,
-                      "SELFCAL0_%d" % target_field,
-                      "MSK_SC0_%d" % target_field,
-                      "image_SC0_%d" % target_field,
-                      "fullrestore_SC0_%d" % target_field,
-                      ]
+                      "SELFCAL0_%d" % target_field]
 
     recipe.run(phase_2gc)

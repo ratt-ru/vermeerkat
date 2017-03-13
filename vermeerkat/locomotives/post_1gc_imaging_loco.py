@@ -25,23 +25,133 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
     recipe = stimela.Recipe("1GC Imaging Engine", ms_dir=MSDIR)
     # imaging
     for target_field, target in zip(target_fields, targets):
-        imname = cfg.obs.basename + "_1GC_" + target.name
-        recipe.add("cab/wsclean", "wsclean_%d" % field_index[target.name],
+        imname_prefix = cfg.obs.basename + "_1GC_" +"0_"+ target.name
+        imname = imname_prefix + "-MFS-image.fits"
+        # gradually clean down using masks
+        recipe.add("cab/wsclean", "wsclean_image_1gc_0_%d" % field_index[target.name],
                    {
                        "msname": cfg.obs.msfile,
-                       "column": cfg.wsclean_image.column,
-                       "weight": "briggs %.2f" % (cfg.wsclean_image.robust),
+                       "column": cfg.wsclean_image_1gc_0.column,
+                       "weight": "briggs %.2f" % (cfg.wsclean_image_1gc_0.robust),
                        "npix": cfg.obs.im_npix,
                        "cellsize": cfg.obs.angular_resolution * cfg.obs.sampling,
-                       "clean_iterations": cfg.wsclean_image.clean_iterations,
-                       "mgain": cfg.wsclean_image.mgain,
+                       "clean_iterations": cfg.wsclean_image_1gc_0.clean_iterations,
+                       "mgain": cfg.wsclean_image_1gc_0.mgain,
                        "channelsout": cfg.obs.im_numchans,
-                       "joinchannels": cfg.wsclean_image.joinchannels,
+                       "joinchannels": cfg.wsclean_image_1gc_0.joinchannels,
                        "field": target_field,
                        "name": imname,
-                       "auto-threshold": cfg.wsclean_image.autothreshold,
+                       "taper-gaussian": cfg.wsclean_image_1gc_0.taper_gaussian,
+                       "auto-threshold": cfg.wsclean_image_1gc_0.autothreshold,
                    },
                    input=INPUT, output=OUTPUT,
-                   label="image_%d::wsclean" % target_field)
+                   label="image_1gc_0_%d::wsclean" % target_field)
+        maskname = imname_prefix + "_0_MASK.fits"
+        recipe.add("cab/cleanmask", "make_clean_mask_1gc_0_%d" % target_field,
+                   {
+                       "image": '%s:output' % imname,
+                       "output": maskname,
+                       "sigma": cfg.cleanmask_1gc_0.sigma,
+                       "iters": cfg.cleanmask_1gc_0.iters,
+                       "boxes": cfg.cleanmask_1gc_0.kernel,
+                   },
+                   input=INPUT, output=OUTPUT,
+                   label="make_clean_mask_1gc_0_%d::Make clean mask" % target_field)
 
-    recipe.run(["image_%d" % t for t in target_fields])
+        imname_prefix = cfg.obs.basename + "_1GC_" + "1_" + target.name
+        imname = imname_prefix + "-MFS-image.fits"
+        recipe.add("cab/wsclean", "wsclean_image_1gc_1_%d" % field_index[target.name],
+                   {
+                       "msname": cfg.obs.msfile,
+                       "column": cfg.wsclean_image_1gc_1.column,
+                       "weight": "briggs %.2f" % (cfg.wsclean_image_1gc_1.robust),
+                       "npix": cfg.obs.im_npix,
+                       "cellsize": cfg.obs.angular_resolution * cfg.obs.sampling,
+                       "clean_iterations": cfg.wsclean_image_1gc_1.clean_iterations,
+                       "mgain": cfg.wsclean_image_1gc_1.mgain,
+                       "channelsout": cfg.obs.im_numchans,
+                       "joinchannels": cfg.wsclean_image_1gc_1.joinchannels,
+                       "field": target_field,
+                       "name": imname,
+                       "taper-gaussian": cfg.wsclean_image_1gc_1.taper_gaussian,
+                       "auto-threshold": cfg.wsclean_image_1gc_1.autothreshold,
+                       "fitsmask": "%s:output" % maskname
+                   },
+                   input=INPUT, output=OUTPUT,
+                   label="image_1gc_1_%d::wsclean" % target_field)
+
+        maskname = imname_prefix + "_1_MASK.fits"
+        recipe.add("cab/cleanmask", "make_clean_mask_1gc_1_%d" % target_field,
+           {
+               "image": '%s:output' % imname,
+               "output": maskname,
+               "sigma": cfg.cleanmask_1gc_1.sigma,
+               "iters": cfg.cleanmask_1gc_1.iters,
+               "boxes": cfg.cleanmask_1gc_1.kernel,
+           },
+           input=INPUT, output=OUTPUT,
+           label="make_clean_mask_1gc_1_%d::Make clean mask" % target_field)
+
+        imname_prefix = cfg.obs.basename + "_1GC_" + "2_" + target.name
+        imname = imname_prefix + "-MFS-image.fits"
+        recipe.add("cab/wsclean", "wsclean_image_1gc_2_%d" % field_index[target.name],
+               {
+                   "msname": cfg.obs.msfile,
+                   "column": cfg.wsclean_image_1gc_2.column,
+                   "weight": "briggs %.2f" % (cfg.wsclean_image_1gc_2.robust),
+                   "npix": cfg.obs.im_npix,
+                   "cellsize": cfg.obs.angular_resolution * cfg.obs.sampling,
+                   "clean_iterations": cfg.wsclean_image_1gc_2.clean_iterations,
+                   "mgain": cfg.wsclean_image_1gc_2.mgain,
+                   "channelsout": cfg.obs.im_numchans,
+                   "joinchannels": cfg.wsclean_image_1gc_2.joinchannels,
+                   "field": target_field,
+                   "name": imname,
+                   "taper-gaussian": cfg.wsclean_image_1gc_2.taper_gaussian,
+                   "auto-threshold": cfg.wsclean_image_1gc_2.autothreshold,
+                   "fitsmask": "%s:output" % maskname
+               },
+               input=INPUT, output=OUTPUT,
+               label="image_1gc_2_%d::wsclean" % target_field)
+
+        maskname = imname_prefix + "_2_MASK.fits"
+        recipe.add("cab/cleanmask", "make_clean_mask_1gc_2_%d" % target_field,
+               {
+                   "image": '%s:output' % imname,
+                   "output": maskname,
+                   "sigma": cfg.cleanmask_1gc_2.sigma,
+                   "iters": cfg.cleanmask_1gc_2.iters,
+                   "boxes": cfg.cleanmask_1gc_2.kernel,
+               },
+               input=INPUT, output=OUTPUT,
+               label="make_clean_mask_1gc_2_%d::Make clean mask" % target_field)
+
+        imname_prefix = cfg.obs.basename + "_1GC_" + "3_" + target.name
+        imname = imname_prefix + "-MFS-image.fits"
+        recipe.add("cab/wsclean", "wsclean_image_1gc_3_%d" % field_index[target.name],
+               {
+                   "msname": cfg.obs.msfile,
+                   "column": cfg.wsclean_image_1gc_3.column,
+                   "weight": "briggs %.2f" % (cfg.wsclean_image_1gc_3.robust),
+                   "npix": cfg.obs.im_npix,
+                   "cellsize": cfg.obs.angular_resolution * cfg.obs.sampling,
+                   "clean_iterations": cfg.wsclean_image_1gc_3.clean_iterations,
+                   "mgain": cfg.wsclean_image_1gc_3.mgain,
+                   "channelsout": cfg.obs.im_numchans,
+                   "joinchannels": cfg.wsclean_image_1gc_3.joinchannels,
+                   "field": target_field,
+                   "name": imname,
+                   "taper-gaussian": cfg.wsclean_image_1gc_3.taper_gaussian,
+                   "auto-threshold": cfg.wsclean_image_1gc_3.autothreshold,
+                   "fitsmask": "%s:output" % maskname
+               },
+               input=INPUT, output=OUTPUT,
+               label="image_1gc_3_%d::wsclean" % target_field)
+
+    recipe.run(["image_1gc_0_%d" % t for t in target_fields] +
+               ["make_clean_mask_1gc_0_%d" % t for t in target_fields] +
+               ["image_1gc_1_%d" % t for t in target_fields] +
+               ["make_clean_mask_1gc_1_%d" % t for t in target_fields] +
+               ["image_1gc_2_%d" % t for t in target_fields] +
+               ["make_clean_mask_1gc_2_%d" % t for t in target_fields] +
+               ["image_1gc_3_%d" % t for t in target_fields])
