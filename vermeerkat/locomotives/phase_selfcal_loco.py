@@ -113,7 +113,7 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
                        "Gjones-ampl-clipping-low": cfg.selfcal0.gjones_ampl_clipping_low,
                        "Gjones-ampl-clipping-high": cfg.selfcal0.gjones_ampl_clipping_high,
                        "Gjones-matrix-type": cfg.selfcal0.gjones_matrix_type,
-                       "make-plots": True,
+                       "make-plots": False, #TODO: these diagonal phase calibration plots don't currently work in owlcat
                        "field-id": target_field
                    },
                    input=INPUT, output=OUTPUT,
