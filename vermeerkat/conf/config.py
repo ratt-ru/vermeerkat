@@ -57,7 +57,7 @@ def is_valid_file(parser, arg):
 
 def general_section_parser():
     """ Parses the general section """
-    parser = argparse.ArgumentParser("General Section", add_help=False)
+    parser = argparse.ArgumentParser("General Section")
 
     # Solr server URL
     parser.add_argument('-s', '--solr-url',
@@ -155,7 +155,6 @@ def configuration(args=None):
         help='Configuration File',
         default=os.path.join(vermeerkat.install_path(),
             'conf', 'default.conf'),)
-
     # Parse configuration file arguments, if any
     args, remaining_args = parser.parse_known_args()
 
@@ -191,6 +190,7 @@ def configuration(args=None):
                 parser = parser_factory()
                 parser.set_defaults(**section_defaults)
                 section_args, args = parser.parse_known_args(args)
+
             # Otherwise just dump the section options into a namedtuple
             # that looks like one produced by argparse
             else:

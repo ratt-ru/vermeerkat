@@ -50,6 +50,7 @@ def merge_observation_metadata(cfg, obs_metadata):
                                     obs.telescope_max_baseline *
                                     1.220) * 3600 #nyquest rate in arcsecs
     obs.fov = cfg.general.fov * 3600 # 1 deg is good enough to cover FWHM of beam at L-Band
+    obs.padding = cfg.general.padding
     obs.sampling = cfg.general.sampling
     if obs.sampling>1:
         raise ValueErro('PSF sampling is > 1. Please check your config file.')

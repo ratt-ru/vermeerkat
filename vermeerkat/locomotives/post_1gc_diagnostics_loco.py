@@ -17,12 +17,14 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import stimela
+import copy
 
 def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
     bandpass_cal = kwargs["bandpass_cal"]
     bpcal_field = kwargs["bpcal_field"]
     gaincal_field = kwargs["gaincal_field"]
-
+    plot_name = kwargs["plot_name"]
+    gain_cal = kwargs["gain_cal"]
     recipe = stimela.Recipe("1GC Diagnostics Engine", ms_dir=MSDIR)
 
     # Diagnostic: amplitude vs uv dist of the bandpass calibrator

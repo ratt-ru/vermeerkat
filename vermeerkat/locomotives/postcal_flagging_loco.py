@@ -40,7 +40,7 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
     # them from the equation... for this we look at the phase of the calibrated
     # gain calibrator and flag out baselines (per channel) which are not up
     # to spec
-    recipe.add("cab/politsiyakat", "flag_malfunctioning_antennas",
+    recipe.add("cab/politsiyakat", "flag_phases_amplitudes",
         {
             "task"                   : cfg.flag_phases_amplitudes.task,
             "msname"                 : cfg.obs.msfile,
@@ -59,7 +59,7 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
             "nthreads"               : cfg.flag_phases_amplitudes.nthreads,
         },
         input=INPUT, output=OUTPUT,
-        label="flag_malfunctioning_antennas:: Flag baselines based on calibrator phases")
+        label="flag_phases_amplitudes:: Flag baselines based on calibrator phases")
 
     post_1gc_flagging = [ "autoflag_corrected_vis",
                           "flag_phases_amplitudes"]
