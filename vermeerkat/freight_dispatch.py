@@ -291,7 +291,8 @@ for obs_metadata in obs_metadatas:
         post_p_selfcal_imaging_loco.launch(cfg, INPUT, MSDIR, OUTPUT,
                                            targets=targets,
                                            field_index=field_index,
-                                           target_fields=target_fields)
+                                           target_fields=target_fields,
+                                           plot_name=plot_name)
 
     #########################################################################
     #
@@ -309,5 +310,6 @@ for obs_metadata in obs_metadatas:
         post_ap_selfcal_imaging_loco.launch(cfg, INPUT, MSDIR, OUTPUT,
                                             targets=targets,
                                             field_index=field_index,
-                                            target_fields=target_fields)
+                                            target_fields=target_fields,
+                                            plot_name=plot_name)
 
