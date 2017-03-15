@@ -114,7 +114,10 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
                        "Gjones-ampl-clipping-high": cfg.selfcal1.gjones_ampl_clipping_high,
                        "Gjones-matrix-type": cfg.selfcal1.gjones_matrix_type,
                        "make-plots": True,
-                       "field-id": target_field
+                       "field-id": target_field,
+                       "Gjones-thresh-sigma": cfg.selfcal1.gjones_thresh_sigma,
+                       "Gjones-chisq-clipping": cfg.selfcal1.gjones_chisq_clipping,
+                       "tile-size" : cfg.selfcal1.tile_size
                    },
                    input=INPUT, output=OUTPUT,
                    label="SELFCAL1_%d:: Calibrate and subtract LSM0" % target_field)

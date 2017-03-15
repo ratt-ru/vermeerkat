@@ -114,7 +114,10 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
                        "Gjones-ampl-clipping-high": cfg.selfcal0.gjones_ampl_clipping_high,
                        "Gjones-matrix-type": cfg.selfcal0.gjones_matrix_type,
                        "make-plots": False, #TODO: these diagonal phase calibration plots don't currently work in owlcat
-                       "field-id": target_field
+                       "field-id": target_field,
+                       "Gjones-thresh-sigma": cfg.selfcal0.gjones_thresh_sigma,
+                       "Gjones-chisq-clipping": cfg.selfcal0.gjones_chisq_clipping,
+                       "tile-size" : cfg.selfcal0.tile_size
                    },
                    input=INPUT, output=OUTPUT,
                    label="SELFCAL0_%d:: Calibrate and subtract LSM0" % target_field)
