@@ -28,7 +28,7 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
     # Initial selfcal loop
     for target_field, target in zip(target_fields, targets):
         # Extract sources in mfs clean image to build initial sky model
-        imname_prefix = cfg.obs.basename + "_SC0_" + plot_name[target.name]
+        imname_prefix = cfg.obs.basename + "_SC0_3_" + plot_name[target.name]
         imname_mfs = imname_prefix + "-MFS-image.fits"
 
         # Construct LSM from sky cleaned after first SC subtraction
@@ -36,10 +36,6 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
         old_model_name = old_model_prefix + ".lsm.html"
         model_prefix = cfg.obs.basename + "_LSM1_" + plot_name[target.name]
         model_name = model_prefix + ".lsm.html"
-        model_master = cfg.obs.basename + \
-                       "_LSM_concatenated_" + \
-                       plot_name[target.name] + \
-                       ".lsm.html"
         recipe.add("cab/pybdsm", "extract_sources_%d" % target_field,
                    {
                        "image": "%s:output" % imname_mfs,
@@ -47,6 +43,7 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
                        "thresh_pix": cfg.source_find1.thresh_pix,
                        "thresh_isl": cfg.source_find1.thresh_isl,
                        "port2tigger": True,
+                       "clobber": True,
                    },
                    input=INPUT, output=OUTPUT,
                    label="source_find1_%d:: Extract sources from previous round of cal" % target_field)
@@ -78,31 +75,18 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
                    input=INPUT, output=OUTPUT,
                    label="SPI1_%d::Add SPIs to LSM" % target_field)
 
-        # Stitch LSM 0 and LSM 1 together into a master LSM file from which
-        # we can do prediction for selfcal
-        recipe.add("cab/tigger_convert", "stitch_LSM0_LSM1",
-                   {
-                       "input-skymodel": "%s:output" % old_model_name,
-                       "output-skymodel": "%s:output" % model_master,
-                       "append": "%s:output" % model_name,
-                   },
-                   input=INPUT, output=OUTPUT,
-                   label="stitch_lsms1_%d::Create master lsm file from SC0 and SC1" %
-                         target_field)
-
         # Selfcal and subtract brightest sources
         recipe.add("cab/calibrator", "Initial_Gjones_subtract_LSM1",
                    {
-                       "skymodel": "%s:output" % model_master,
+                       "skymodel": "%s:output" % model_name,
                        "label": cfg.selfcal1.label,
                        "msname": cfg.obs.msfile,
                        "threads": cfg.selfcal1.ncpu,
                        "column": cfg.selfcal1.column,
                        "output-data": cfg.selfcal1.output,
                        "Gjones": cfg.selfcal1.gjones,
-                       "Gjones-solution-intervals": [int(math.ceil(float(cfg.obs.gain_sol_int[:-1]))),
-                                                     int(cfg.obs.nchans /
-                                                         float(100))],
+                       "Gjones-solution-intervals": [cfg.selfcal1.gjones_time_interval,
+                                                     cfg.selfcal1.gjones_freq_interval],
                        "DDjones-smoothing-intervals": cfg.selfcal1.ddjones_smoothing,
                        # TODO: MeerKAT beams need to go in this section
                        "Ejones": cfg.selfcal1.ejones,
@@ -131,19 +115,6 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
         #     },
         #     input=INPUT,   output=OUTPUT,
         #     label="flagset_selfcal0_flags:: Backup selfcal flags")
-
-        # create a mask for this round of selfcal
-        maskname = imname_prefix + "_MASK.fits"
-        recipe.add("cab/cleanmask", "make_clean_mask",
-                   {
-                       "image": '%s:output' % imname_mfs,
-                       "output": maskname,
-                       "sigma": cfg.cleanmask1.sigma,
-                       "iters": cfg.cleanmask1.iters,
-                       "boxes": cfg.cleanmask1.kernel,
-                   },
-                   input=INPUT, output=OUTPUT,
-                   label="MSK_SC1_%d::Make clean mask" % target_field)
 
     # Initial selfcal loop
     phaseamp_2gc = []

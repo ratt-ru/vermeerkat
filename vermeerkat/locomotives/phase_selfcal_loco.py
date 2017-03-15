@@ -59,6 +59,7 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
                        "thresh_pix": cfg.source_find0.thresh_pix,
                        "thresh_isl": cfg.source_find0.thresh_isl,
                        "port2tigger": True,
+                       "clobber" : True,
                    },
                    input=INPUT, output=OUTPUT,
                    label="source_find0_%d:: Extract sources from previous round of cal" % target_field)
@@ -100,9 +101,8 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
                        "column": cfg.selfcal0.column,
                        "output-data": cfg.selfcal0.output,
                        "Gjones": cfg.selfcal0.gjones,
-                       "Gjones-solution-intervals": [int(math.ceil(float(cfg.obs.gain_sol_int[:-1]))),
-                                                     int(cfg.obs.nchans /
-                                                         float(100))],
+                       "Gjones-solution-intervals": [cfg.selfcal0.gjones_time_interval,
+                                                     cfg.selfcal0.gjones_freq_interval],
                        "DDjones-smoothing-intervals": cfg.selfcal0.ddjones_smoothing,
                        # TODO: MeerKAT beams need to go in this section
                        "Ejones": cfg.selfcal0.ejones,
