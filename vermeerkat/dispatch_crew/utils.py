@@ -36,6 +36,8 @@ def merge_observation_metadata(cfg, obs_metadata):
     obs.post_mit_ampcal_table = "%s.1.2gc.G1:output" % obs.basename
     obs.post_mit_fluxcal_table = "%s.1.2gc.fluxscale:output" % obs.basename
     obs.post_mit_bpasscal_table = "%s.1.2gc.B0:output" % obs.basename
+    obs.casa_SC0_gain_table = "%s.sc0.G0:output" % obs.basename
+    obs.casa_SC1_gain_table = "%s.sc1.G0:output" % obs.basename
 
     #Observation properties
     obs.refant = str(obs_metadata["RefAntenna"])
@@ -53,7 +55,7 @@ def merge_observation_metadata(cfg, obs_metadata):
     obs.padding = cfg.general.padding
     obs.sampling = cfg.general.sampling
     if obs.sampling>1:
-        raise ValueErro('PSF sampling is > 1. Please check your config file.')
+        raise ValueError('PSF sampling is > 1. Please check your config file.')
 
     obs.im_npix = int(obs.fov / obs.angular_resolution / obs.sampling)
     obs.bw_per_image_slice = float(cfg.general.bw_per_mfs_slice)

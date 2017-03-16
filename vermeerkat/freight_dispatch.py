@@ -36,7 +36,9 @@ from vermeerkat.locomotives import converter_loco, \
                                    phase_selfcal_loco, \
                                    phaseamp_selfcal_loco, \
                                    post_p_selfcal_imaging_loco, \
-                                   post_ap_selfcal_imaging_loco
+                                   post_ap_selfcal_imaging_loco, \
+                                   phase_selfcal_casa_loco, \
+                                   phaseamp_selfcal_casa_loco
 
 # So that we can access GLOBALS pass through to the run command
 stimela.register_globals()
@@ -282,11 +284,12 @@ for obs_metadata in obs_metadatas:
     # Phase only self calibration (2nd gen)
     #
     #########################################################################
+    sc0_loco = phase_selfcal_loco if cfg.general.replace_casa_with_mt_selfcal else phase_selfcal_casa_loco
     if not cfg.general.skip_phaseonly_selfcal:
-        phase_selfcal_loco.launch(cfg, INPUT, MSDIR, OUTPUT,
-                                  plot_name=plot_name,
-                                  targets=targets,
-                                  target_fields=target_fields)
+        sc0_loco.launch(cfg, INPUT, MSDIR, OUTPUT,
+                        plot_name=plot_name,
+                        targets=targets,
+                        target_fields=target_fields)
     if not cfg.general.skip_phaseonly_selfcal_imaging:
         post_p_selfcal_imaging_loco.launch(cfg, INPUT, MSDIR, OUTPUT,
                                            targets=targets,
@@ -301,11 +304,12 @@ for obs_metadata in obs_metadatas:
     # After most of the significant phase error has been corrected
     # we should be able to clean deeper, so rerun this time with amplitude
     #########################################################################
+    sc1_loco = phaseamp_selfcal_loco if cfg.general.replace_casa_with_mt_selfcal else phaseamp_selfcal_casa_loco
     if not cfg.general.skip_ampphase_selfcal:
-        phaseamp_selfcal_loco.launch(cfg, INPUT, MSDIR, OUTPUT,
-                                     plot_name=plot_name,
-                                     targets=targets,
-                                     target_fields=target_fields)
+        sc1_loco.launch(cfg, INPUT, MSDIR, OUTPUT,
+                        plot_name=plot_name,
+                        targets=targets,
+                        target_fields=target_fields)
     if not cfg.general.skip_ampphase_selfcal_imaging:
         post_ap_selfcal_imaging_loco.launch(cfg, INPUT, MSDIR, OUTPUT,
                                             targets=targets,

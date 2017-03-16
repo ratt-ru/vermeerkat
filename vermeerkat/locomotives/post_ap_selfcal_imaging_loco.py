@@ -23,6 +23,7 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
     plot_name = kwargs["plot_name"]
     targets = kwargs["targets"]
     target_fields = kwargs["target_fields"]
+    do_full_restore = kwargs["do_full_restore"]
     recipe = stimela.Recipe("Phase amplitude selfcal imaging engine", ms_dir=MSDIR)
     for target_field, target in zip(target_fields, targets):
         # make another mfs image and clean down gradually using masks
@@ -162,16 +163,17 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
                    label="image_SC1_3_%d::wsclean" % target_field)
 
         # full restore into the final mfs
-        imname_mfs_fullrest = imname_prefix + "-MFS-image.full_restore.fits"
-        recipe.add("cab/tigger_restore", "full_restore_SC1_%d" % target_field,
-                   {
-                       "input-image": "%s:output" % imname,
-                       "input-skymodel": "%s:output" % model_master,
-                       "output-image": '%s:output' % imname_mfs_fullrest,
-                       "freq": cfg.obs.freq_0,
-                   },
-                   input=INPUT, output=OUTPUT,
-                   label="fullrestore_SC1_%d::tigger_restore" % target_field)
+        if do_full_restore:
+            imname_mfs_fullrest = imname_prefix + "-MFS-image.full_restore.fits"
+            recipe.add("cab/tigger_restore", "full_restore_SC1_%d" % target_field,
+                       {
+                           "input-image": "%s:output" % imname,
+                           "input-skymodel": "%s:output" % model_master,
+                           "output-image": '%s:output' % imname_mfs_fullrest,
+                           "freq": cfg.obs.freq_0,
+                       },
+                       input=INPUT, output=OUTPUT,
+                       label="fullrestore_SC1_%d::tigger_restore" % target_field)
 
     for ti in targets:
         # Extract sources in mfs clean image to build initial sky model
@@ -206,5 +208,5 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
                ["image_SC1_2_%d" % t for t in target_fields] +
                ["make_clean_mask_sc1_2_%d" % t for t in target_fields] +
                ["image_SC1_3_%d" % t for t in target_fields] +
-               ["fullrestore_SC1_%d" % t for t in target_fields] +
+               (["fullrestore_SC1_%d" % t for t in target_fields] if do_full_restore else []) +
                ["image_stokesv_residue_%d" % t for t in target_fields])
