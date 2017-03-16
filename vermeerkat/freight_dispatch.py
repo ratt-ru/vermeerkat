@@ -305,6 +305,7 @@ for obs_metadata in obs_metadatas:
     # we should be able to clean deeper, so rerun this time with amplitude
     #########################################################################
     sc1_loco = phaseamp_selfcal_loco if cfg.general.replace_casa_with_mt_selfcal else phaseamp_selfcal_casa_loco
+    should_fullrest = not cfg.general.replace_casa_with_mt_selfcal
     if not cfg.general.skip_ampphase_selfcal:
         sc1_loco.launch(cfg, INPUT, MSDIR, OUTPUT,
                         plot_name=plot_name,
@@ -315,5 +316,6 @@ for obs_metadata in obs_metadatas:
                                             targets=targets,
                                             field_index=field_index,
                                             target_fields=target_fields,
-                                            plot_name=plot_name)
+                                            plot_name=plot_name,
+                                            do_full_restore=should_fullrest)
 
