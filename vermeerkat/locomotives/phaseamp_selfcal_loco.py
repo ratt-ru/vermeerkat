@@ -26,6 +26,14 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
     recipe = stimela.Recipe("Phase amplitude 2GC Pipeline", ms_dir=MSDIR)
 
     # Initial selfcal loop
+    recipe.add("cab/flagms", "remove_sc0_flags",
+            {
+                        "msname"        : cfg.obs.msfile,
+                        "unflag"          : "FLAG0",
+            },
+            input=INPUT, output=OUTPUT,
+            label="flagset_clear_flags:: Clear SC0 flags")
+
     for target_field, target in zip(target_fields, targets):
         # Extract sources in mfs clean image to build initial sky model
         imname_prefix = cfg.obs.basename + "_SC0_3_" + plot_name[target.name]
@@ -74,9 +82,9 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
                    },
                    input=INPUT, output=OUTPUT,
                    label="SPI1_%d::Add SPIs to LSM" % target_field)
-
+ 
         # Selfcal and subtract brightest sources
-        recipe.add("cab/calibrator", "Initial_Gjones_subtract_LSM1",
+        recipe.add("cab/calibrator", "Gjones_subtract_LSM1",
                    {
                        "skymodel": "%s:output" % model_name,
                        "label": cfg.selfcal1.label,
@@ -105,24 +113,14 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
                    },
                    input=INPUT, output=OUTPUT,
                    label="SELFCAL1_%d:: Calibrate and subtract LSM0" % target_field)
-        # Move the current flags to a new flag set in prep for next selfcal
-        # round
-        # recipe.add("cab/flagms", "backup_sc0_flags",
-        #     {
-        #         "msname"        : cfg.obs.msfile,
-        #         "flagged-any"   : cfg.flagset_saveas_legacy.flagged_any,
-        #         "flag"          : cfg.flagset_saveas_legacy.flag,
-        #     },
-        #     input=INPUT,   output=OUTPUT,
-        #     label="flagset_selfcal0_flags:: Backup selfcal flags")
 
     # Initial selfcal loop
     phaseamp_2gc = []
     for target_field in target_fields:
-        phaseamp_2gc += ["source_find1_%d" % target_field,
+        phaseamp_2gc += ["flagset_clear_flags",
+                         "source_find1_%d" % target_field,
                          "stitch_cube1_%d" % target_field,
                          "SPI1_%d" % target_field,
-                         "stitch_lsms1_%d" % target_field,
                          "SELFCAL1_%d" % target_field,
                          ]
     recipe.run(phaseamp_2gc)

@@ -158,23 +158,10 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
                    input=INPUT, output=OUTPUT,
                    label="image_SC0_3_%d::wsclean" % target_field)
 
-        # full restore into the final mfs
-        imname_mfs_fullrest = imname_prefix + "-MFS-image.full_restore.fits"
-        recipe.add("cab/tigger_restore", "full_restore_SC0_%d" % target_field,
-                   {
-                       "input-image": "%s:output" % imname,
-                       "input-skymodel": "%s:output" % model_name,
-                       "output-image": '%s:output' % imname_mfs_fullrest,
-                       "freq": cfg.obs.freq_0,
-                   },
-                   input=INPUT, output=OUTPUT,
-                   label="fullrestore_SC0_%d::tigger_restore" % target_field)
-
     recipe.run(["image_SC0_0_%d" % t for t in target_fields] +
                ["make_clean_mask_sc0_0_%d" % t for t in target_fields] +
                ["image_SC0_1_%d" % t for t in target_fields] +
                ["make_clean_mask_sc0_1_%d" % t for t in target_fields] +
                ["image_SC0_2_%d" % t for t in target_fields] +
                ["make_clean_mask_sc0_2_%d" % t for t in target_fields] +
-               ["image_SC0_3_%d" % t for t in target_fields] +
-               ["fullrestore_SC0_%d" % t for t in target_fields])
+               ["image_SC0_3_%d" % t for t in target_fields])
