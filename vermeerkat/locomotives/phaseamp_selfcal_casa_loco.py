@@ -58,7 +58,7 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
             "expformat": cfg.casa_sc1_gainamp_time.expformat,
             "exprange": cfg.casa_sc1_gainamp_time.exprange,
             "plotfile": cfg.obs.basename +
-                        plot_name[target_field.name] + "_" +
+                        plot_name[target.name] + "_" +
                         "sc1_gainamp_time.png",
             "overwrite": True,
         }
@@ -67,8 +67,6 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
             "msname": cfg.obs.msfile,
             "xaxis": cfg.casa_sc1_gainphase_time.xaxis,
             "yaxis": cfg.casa_sc1_gainphase_time.yaxis,
-            "xdatacolumn": cfg.casa_sc1_gainphase_time.xdatacolumn,
-            "ydatacolumn": cfg.casa_sc1_gainphase_time.ydatacolumn,
             "field": str(target_field),
             "iteraxis": cfg.casa_sc1_gainphase_time.iteraxis,
             "avgchannel": cfg.casa_sc1_gainphase_time.avgchannel,
@@ -77,7 +75,7 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
             "expformat": cfg.casa_sc1_gainphase_time.expformat,
             "exprange": cfg.casa_sc1_gainphase_time.exprange,
             "plotfile": cfg.obs.basename +
-                        plot_name[target_field.name] + "_" +
+                        plot_name[target.name] + "_" +
                         "sc1_gainphase_time.png",
             "overwrite": True,
         }
@@ -86,8 +84,6 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
             "msname": cfg.obs.msfile,
             "xaxis": cfg.casa_sc1_gainamp_freq.xaxis,
             "yaxis": cfg.casa_sc1_gainamp_freq.yaxis,
-            "xdatacolumn": cfg.casa_sc1_gainamp_freq.xdatacolumn,
-            "ydatacolumn": cfg.casa_sc1_gainamp_freq.ydatacolumn,
             "field": str(target_field),
             "iteraxis": cfg.casa_sc1_gainamp_freq.iteraxis,
             "avgchannel": cfg.casa_sc1_gainamp_freq.avgchannel,
@@ -96,7 +92,7 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
             "expformat": cfg.casa_sc1_gainamp_freq.expformat,
             "exprange": cfg.casa_sc1_gainamp_freq.exprange,
             "plotfile": cfg.obs.basename +
-                        plot_name[target_field.name] + "_" +
+                        plot_name[target.name] + "_" +
                         "sc1_gainamp_freq.png",
             "overwrite": True,
         }
@@ -105,8 +101,6 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
             "msname": cfg.obs.msfile,
             "xaxis": cfg.casa_sc1_gainphase_freq.xaxis,
             "yaxis": cfg.casa_sc1_gainphase_freq.yaxis,
-            "xdatacolumn": cfg.casa_sc1_gainphase_freq.xdatacolumn,
-            "ydatacolumn": cfg.casa_sc1_gainphase_freq.ydatacolumn,
             "field": str(target_field),
             "iteraxis": cfg.casa_sc1_gainphase_freq.iteraxis,
             "avgchannel": cfg.casa_sc1_gainphase_freq.avgchannel,
@@ -115,7 +109,7 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
             "expformat": cfg.casa_sc1_gainphase_freq.expformat,
             "exprange": cfg.casa_sc1_gainphase_freq.exprange,
             "plotfile": cfg.obs.basename +
-                        plot_name[target_field.name] + "_" +
+                        plot_name[target.name] + "_" +
                         "sc1_gainphase_freq.png",
             "overwrite": True,
         }
