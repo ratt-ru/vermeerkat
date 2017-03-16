@@ -23,6 +23,17 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
     targets = kwargs["targets"]
     target_fields = kwargs["target_fields"]
     recipe = stimela.Recipe("Initial phase-only 2GC Pipeline", ms_dir=MSDIR)
+    # Copy CORRECTED_DATA to DATA, so we can start selfcal
+    recipe.add("cab/msutils", "shift_columns",
+               {
+                   "command": cfg.move_corrdata_to_data_casa.command,
+                   "msname": cfg.obs.msfile,
+                   "fromcol": cfg.move_corrdata_to_data_casa.fromcol,
+                   "tocol": cfg.move_corrdata_to_data_casa.tocol,
+               },
+               input=INPUT, output=OUTPUT,
+               label="move_corrdata_to_data_casa::msutils")
+
     # Initial selfcal loop
     for target_field, target in zip(target_fields, targets):
         gain_cal_opts = {
@@ -139,7 +150,8 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
                    input=INPUT, output=OUTPUT,
                    label="plot_gphase_freq_sc0_%d:: Gain phase with freq" % target_field)
 
-    recipe.run(["casa_sc0_gaincal_%d" % tf for tf in target_fields] +
+    recipe.run(["move_corrdata_to_data_casa"] +
+               ["casa_sc0_gaincal_%d" % tf for tf in target_fields] +
                ["casa_sc0_applycal_%d" % tf for tf in target_fields] +
                ["plot_gamp_time_sc0_%d" % tf for tf in target_fields] +
                ["plot_gphase_time_sc0_%d" % tf for tf in target_fields] +
