@@ -25,7 +25,8 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
     recipe = stimela.Recipe("1GC Imaging Engine", ms_dir=MSDIR)
     # imaging
     for target_field, target in zip(target_fields, targets):
-        imname_prefix = cfg.obs.basename + "_1GC_" +"0_"+ target.name
+        imname_prefix = cfg.obs.basename + "_1GC_" +"0_" + \
+            target.name.replace(" ","_")
         imname = imname_prefix + "-MFS-image.fits"
         # gradually clean down using masks
         recipe.add("cab/wsclean", "wsclean_image_1gc_0_%d" % field_index[target.name],
@@ -44,6 +45,7 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
                        "name": imname_prefix,
                        "taper-gaussian": cfg.wsclean_image_1gc_0.taper_gaussian,
                        "auto-threshold": cfg.wsclean_image_1gc_0.autothreshold,
+                       "pol": cfg.general.imaging_pol,
                    },
                    input=INPUT, output=OUTPUT,
                    label="image_1gc_0_%d::wsclean" % target_field)
@@ -62,7 +64,8 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
                    input=INPUT, output=OUTPUT,
                    label="make_clean_mask_1gc_0_%d::Make clean mask" % target_field)
 
-        imname_prefix = cfg.obs.basename + "_1GC_" + "1_" + target.name
+        imname_prefix = cfg.obs.basename + "_1GC_" + "1_" + \
+            target.name.replace(" ","_")
         imname = imname_prefix + "-MFS-image.fits"
         recipe.add("cab/wsclean", "wsclean_image_1gc_1_%d" % field_index[target.name],
                    {
@@ -80,7 +83,8 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
                        "name": imname_prefix,
                        "taper-gaussian": cfg.wsclean_image_1gc_1.taper_gaussian,
                        "auto-threshold": cfg.wsclean_image_1gc_1.autothreshold,
-                       "fitsmask": "%s:output" % maskname
+                       "fitsmask": "%s:output" % maskname,
+                       "pol": cfg.general.imaging_pol,
                    },
                    input=INPUT, output=OUTPUT,
                    label="image_1gc_1_%d::wsclean" % target_field)
@@ -101,7 +105,8 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
            input=INPUT, output=OUTPUT,
            label="make_clean_mask_1gc_1_%d::Make clean mask" % target_field)
 
-        imname_prefix = cfg.obs.basename + "_1GC_" + "2_" + target.name
+        imname_prefix = cfg.obs.basename + "_1GC_" + "2_" + \
+            target.name.replace(" ","_")
         imname = imname_prefix + "-MFS-image.fits"
         recipe.add("cab/wsclean", "wsclean_image_1gc_2_%d" % field_index[target.name],
                {
@@ -119,7 +124,8 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
                    "name": imname_prefix,
                    "taper-gaussian": cfg.wsclean_image_1gc_2.taper_gaussian,
                    "auto-threshold": cfg.wsclean_image_1gc_2.autothreshold,
-                   "fitsmask": "%s:output" % maskname
+                   "fitsmask": "%s:output" % maskname,
+                   "pol": cfg.general.imaging_pol,
                },
                input=INPUT, output=OUTPUT,
                label="image_1gc_2_%d::wsclean" % target_field)
@@ -139,7 +145,8 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
                input=INPUT, output=OUTPUT,
                label="make_clean_mask_1gc_2_%d::Make clean mask" % target_field)
 
-        imname_prefix = cfg.obs.basename + "_1GC_" + "3_" + target.name
+        imname_prefix = cfg.obs.basename + "_1GC_" + "3_" + \
+            target.name.replace(" ","_")
         imname = imname_prefix + "-MFS-image.fits"
         recipe.add("cab/wsclean", "wsclean_image_1gc_3_%d" % field_index[target.name],
                {
@@ -157,7 +164,8 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
                    "name": imname_prefix,
                    "taper-gaussian": cfg.wsclean_image_1gc_3.taper_gaussian,
                    "auto-threshold": cfg.wsclean_image_1gc_3.autothreshold,
-                   "fitsmask": "%s:output" % maskname
+                   "fitsmask": "%s:output" % maskname,
+                   "pol": cfg.general.imaging_pol,
                },
                input=INPUT, output=OUTPUT,
                label="image_1gc_3_%d::wsclean" % target_field)

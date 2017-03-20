@@ -85,7 +85,7 @@ for obs_metadata in obs_metadatas:
                                                                 cfg.obs.h5file))
 
     # Categories the fields observed in each scan
-    field_index, bpcals, gaincals, targets = vmu.categorise_fields(scans)
+    field_index, bpcals, gaincals, targets = vmu.categorise_fields(scans, cfg)
 
     # Log useful information
     vermeerkat.log.info("The following fields were observed:")
@@ -284,7 +284,7 @@ for obs_metadata in obs_metadatas:
     # Phase only self calibration (2nd gen)
     #
     #########################################################################
-    sc0_loco = phase_selfcal_loco if cfg.general.replace_casa_with_mt_selfcal else phase_selfcal_casa_loco
+    sc0_loco = phase_selfcal_casa_loco if cfg.general.replace_mt_with_casa_selfcal else phase_selfcal_loco
     if not cfg.general.skip_phaseonly_selfcal:
         sc0_loco.launch(cfg, INPUT, MSDIR, OUTPUT,
                         plot_name=plot_name,
@@ -304,8 +304,8 @@ for obs_metadata in obs_metadatas:
     # After most of the significant phase error has been corrected
     # we should be able to clean deeper, so rerun this time with amplitude
     #########################################################################
-    sc1_loco = phaseamp_selfcal_loco if cfg.general.replace_casa_with_mt_selfcal else phaseamp_selfcal_casa_loco
-    should_fullrest = not cfg.general.replace_casa_with_mt_selfcal
+    sc1_loco = phaseamp_selfcal_casa_loco if cfg.general.replace_mt_with_casa_selfcal else phaseamp_selfcal_loco
+    should_fullrest = not cfg.general.replace_mt_with_casa_selfcal
     if not cfg.general.skip_ampphase_selfcal:
         sc1_loco.launch(cfg, INPUT, MSDIR, OUTPUT,
                         plot_name=plot_name,

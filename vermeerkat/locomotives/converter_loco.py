@@ -28,6 +28,7 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
             'output-ms'  : cfg.obs.msfile,
             'model-data' : True,
             'full_pol'   : cfg.h5toms.full_pol,
+            'pols-to-use': cfg.h5toms.pols_to_use
         },
         input=INPUT, output=OUTPUT,
         label="convert::h5toms")

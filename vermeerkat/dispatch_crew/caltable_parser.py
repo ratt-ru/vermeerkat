@@ -24,7 +24,7 @@ def read_caltable(filename):
                 line = f.readline()
                 ln_no += 1
                 continue
-
+            cmd = None
             #source ?
             valset = re.match(r"^name=(?P<name>[0-9A-Za-z\-+_ ]+)[ ]+"
                               r"epoch=(?P<epoch>[0-9]+)[ ]+"
@@ -35,55 +35,74 @@ def read_caltable(filename):
                               r"c=(?P<c>[+\-]?[0-9]+(?:.[0-9]+)?)[ ]+"
                               r"d=(?P<d>[+\-]?[0-9]+(?:.[0-9]+)?)$",
                               command)
-            #else illegal
+            #else alias ?
             if not valset:
-                raise RuntimeError("Illegal line encountered while parsing"
-                                   "southern standard at line %d:'%s'" %
-                                   (ln_no, line))
+                valset = re.match(r"^alias src=(?P<src>[0-9A-Za-z\-+_ ]+)[ ]+"
+                                  r"dest=(?P<dest>[0-9A-Za-z\-+_ ]+)$",
+                                  command)
+                #else illegal
+                if not valset:
+                    raise RuntimeError("Illegal line encountered while parsing"
+                                       "southern standard at line %d:'%s'" %
+                                       (ln_no, line))
 
-            # parse sources (spectra in MHz)
-            name = valset.group("name")
-            epoch = int(valset.group("epoch"))
-            ra = valset.group("ra")
-            valset_ra = re.match(r"^(?P<h>[+\-]?[0-9]+)h"
-                                 r"(?P<m>[0-9]+)m"
-                                 r"(?P<s>[0-9]+(?:.[0-9]+)?)s$",
-                                 ra)
-            ra = np.deg2rad((float(valset_ra.group("h")) +
-                             float(valset_ra.group("m")) / 60.0 +
-                             float(valset_ra.group("s")) / 3600) / 24.0 * 360)
-            decl = valset.group("decl")
-            valset_decl = re.match(r"^(?P<d>[+\-]?[0-9]+)d"
-                                   r"(?P<m>[0-9]+)m"
-                                   r"(?P<s>[0-9]+(?:.[0-9]+)?)s$",
-                                   decl)
-            decl = np.deg2rad(float(valset_decl.group("d")) + \
-                              float(valset_decl.group("m")) + \
-                              float(valset_decl.group("s")))
+                cmd = "alias"
+            else:
+                cmd = "add"
 
-            a = float(valset.group("a"))
-            b = float(valset.group("b"))
-            c = float(valset.group("c"))
-            d = float(valset.group("d"))
+            if cmd == "add":
+                # parse sources (spectra in MHz)
+                name = valset.group("name")
+                epoch = int(valset.group("epoch"))
+                ra = valset.group("ra")
+                valset_ra = re.match(r"^(?P<h>[+\-]?[0-9]+)h"
+                                     r"(?P<m>[0-9]+)m"
+                                     r"(?P<s>[0-9]+(?:.[0-9]+)?)s$",
+                                     ra)
+                ra = np.deg2rad((float(valset_ra.group("h")) +
+                                 float(valset_ra.group("m")) / 60.0 +
+                                 float(valset_ra.group("s")) / 3600) / 24.0 * 360)
+                decl = valset.group("decl")
+                valset_decl = re.match(r"^(?P<d>[+\-]?[0-9]+)d"
+                                       r"(?P<m>[0-9]+)m"
+                                       r"(?P<s>[0-9]+(?:.[0-9]+)?)s$",
+                                       decl)
+                decl = np.deg2rad(float(valset_decl.group("d")) + \
+                                  float(valset_decl.group("m")) + \
+                                  float(valset_decl.group("s")))
 
-            # convert models to Perley Butler GHz format
-            k = np.log10(1000)
-            ag = a + (b * k) + (c * k ** 2) + (d * k ** 3)
-            bg = b + (2 * c * k) + (3 * d * k ** 2)
-            cg = c + (3 * d * k)
-            dg = d
+                a = float(valset.group("a"))
+                b = float(valset.group("b"))
+                c = float(valset.group("c"))
+                d = float(valset.group("d"))
 
-            calibrator_db[name] = {"epoch": epoch,
-                                   "ra": ra,
-                                   "decl": decl,
-                                   "a_ghz": ag,
-                                   "b_ghz": bg,
-                                   "c_ghz": cg,
-                                   "d_ghz": dg,
-                                   "a_mhz": a,
-                                   "b_mhz": b,
-                                   "c_mhz": c,
-                                   "d_mhz": d}
+                # convert models to Perley Butler GHz format
+                k = np.log10(1000)
+                ag = a + (b * k) + (c * k ** 2) + (d * k ** 3)
+                bg = b + (2 * c * k) + (3 * d * k ** 2)
+                cg = c + (3 * d * k)
+                dg = d
+
+                calibrator_db[name] = {"epoch": epoch,
+                                       "ra": ra,
+                                       "decl": decl,
+                                       "a_ghz": ag,
+                                       "b_ghz": bg,
+                                       "c_ghz": cg,
+                                       "d_ghz": dg,
+                                       "a_mhz": a,
+                                       "b_mhz": b,
+                                       "c_mhz": c,
+                                       "d_mhz": d}
+            elif cmd == "alias":
+                src = valset.group("src")
+                dest = valset.group("dest")
+                if not src in calibrator_db:
+                    raise RuntimeError("%s has not been defined. Cannot alias "
+                                       "%s to %s in line %d" %
+                                       (src,dest,src,ln_no))
+                calibrator_db[dest] = calibrator_db[src]
+
             # finally parse next line
             line = f.readline()
             ln_no += 1

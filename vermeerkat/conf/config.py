@@ -127,10 +127,14 @@ def general_section_parser():
                         help="Skip amplitude and phase selfcal imaging",
                         action="store_true",
                         default=False)
-    parser.add_argument('--replace_casa_with_mt_selfcal',
-                        help="Swap CASA for Meqtrees during selfcal",
+
+    parser.add_argument('--replace_mt_with_casa_selfcal',
+                        help="Swap Meqtrees for CASA during selfcal",
                         action="store_true",
                         default=False)
+
+    parser.add_argument('-t', '--target',
+                        help="Manually specify imaging target")
 
     return parser
 

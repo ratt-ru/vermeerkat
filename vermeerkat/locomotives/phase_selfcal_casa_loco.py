@@ -41,11 +41,13 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
             "caltable": cfg.obs.casa_SC0_gain_table,
             "field": str(target_field),
             "spw": cfg.casa_sc0_gaincal.spw,
-            "solint": cfg.obs.gain_sol_int,
             "refant": cfg.obs.refant,
             "gaintype": cfg.casa_sc0_gaincal.gaintype,
             "calmode": cfg.casa_sc0_gaincal.calmode,
             "solnorm": cfg.casa_sc0_gaincal.solnorm,
+            "solint": cfg.casa_sc0_gaincal.solint,
+            "minsnr": cfg.casa_sc0_gaincal.minsnr,
+            "combine": cfg.casa_sc0_gaincal.combine,
         }
         apply_cal_opts = {
             "msname": cfg.obs.msfile,

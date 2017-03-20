@@ -50,6 +50,7 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
                        "name": imname_prefix,
                        "taper-gaussian": cfg.wsclean_image_sc1_0.taper_gaussian,
                        "auto-threshold": cfg.wsclean_image_sc1_0.autothreshold,
+                       "pol": cfg.general.imaging_pol,
                    },
                    input=INPUT, output=OUTPUT,
                    label="image_SC1_0_%d::wsclean" % target_field)
@@ -87,6 +88,7 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
                        "name": imname_prefix,
                        "taper-gaussian": cfg.wsclean_image_sc1_1.taper_gaussian,
                        "auto-threshold": cfg.wsclean_image_sc1_1.autothreshold,
+                       "pol": cfg.general.imaging_pol,
                    },
                    input=INPUT, output=OUTPUT,
                    label="image_SC1_1_%d::wsclean" % target_field)
@@ -122,6 +124,7 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
                        "name": imname_prefix,
                        "taper-gaussian": cfg.wsclean_image_sc1_2.taper_gaussian,
                        "auto-threshold": cfg.wsclean_image_sc1_2.autothreshold,
+                       "pol": cfg.general.imaging_pol,
                    },
                    input=INPUT, output=OUTPUT,
                    label="image_SC1_2_%d::wsclean" % target_field)
@@ -158,6 +161,7 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
                        "name": imname_prefix,
                        "taper-gaussian": cfg.wsclean_image_sc1_3.taper_gaussian,
                        "auto-threshold": cfg.wsclean_image_sc1_3.autothreshold,
+                       "pol": cfg.general.imaging_pol,
                    },
                    input=INPUT, output=OUTPUT,
                    label="image_SC1_3_%d::wsclean" % target_field)
