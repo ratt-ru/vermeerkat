@@ -78,7 +78,9 @@ setup(name=PACKAGE_NAME,
         'katdal >= 0.7',
         'scipy >= 0.7.0',
         'pytz >= 2016.10',
-        'stimela == 0.2.8',
+        #things are in constant flux there is no point
+        #in fixing this
+        #'stimela == 0.2.8',
     ],
     package_data={ PACKAGE_NAME: 'conf/*.conf' },
     include_package_data=True,
