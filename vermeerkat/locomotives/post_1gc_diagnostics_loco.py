@@ -255,6 +255,7 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
                    "joinchannels": cfg.wsclean_bandpass.joinchannels,
                    "field": str(bpcal_field),
                    "name": cfg.obs.basename + "_bp_" + plot_name[bandpass_cal.name],
+                   "pol": cfg.general.imaging_pol,
                },
                input=INPUT, output=OUTPUT,
                label="image_bandpass::wsclean")
@@ -273,6 +274,7 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
                    "joinchannels": cfg.wsclean_gain.joinchannels,
                    "field": str(gaincal_field),
                    "name": cfg.obs.basename + "_gc_" + plot_name[gain_cal.name],
+                   "pol": cfg.general.imaging_pol,
                },
                input=INPUT, output=OUTPUT,
                label="image_gain::wsclean")
