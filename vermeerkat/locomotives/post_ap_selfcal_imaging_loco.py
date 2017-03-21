@@ -18,6 +18,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import stimela
 import math
+import vermeerkat
 
 def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
     plot_name = kwargs["plot_name"]
@@ -179,7 +180,24 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
                        input=INPUT, output=OUTPUT,
                        label="fullrestore_SC1_%d::tigger_restore" % target_field)
 
-    for ti in targets:
+
+    recipe.run(["image_SC1_0_%d" % t for t in target_fields] +
+               ["make_clean_mask_sc1_0_%d" % t for t in target_fields] +
+               ["image_SC1_1_%d" % t for t in target_fields] +
+               ["make_clean_mask_sc1_1_%d" % t for t in target_fields] +
+               ["image_SC1_2_%d" % t for t in target_fields] +
+               ["make_clean_mask_sc1_2_%d" % t for t in target_fields] +
+               ["image_SC1_3_%d" % t for t in target_fields] +
+               (["fullrestore_SC1_%d" % t for t in target_fields] if do_full_restore else []))
+
+    ##
+    # Optional : Stokes V diagnostic image - not always available so lets not
+    # make this compulsory
+    ##
+
+    recipe = stimela.Recipe("Stokes V diagnostic engine", ms_dir=MSDIR)
+
+    for target_field, target in zip(target_fields, targets):
         # Extract sources in mfs clean image to build initial sky model
         imname_prefix = cfg.obs.basename + "_STOKES_V_RESIDUE_" + plot_name[target.name]
 
@@ -203,14 +221,9 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
                    },
                    input=INPUT, output=OUTPUT,
                    label="image_stokesv_residue_%d::wsclean image STOKES "
-                         "V as diagnostic" % ti)
-
-    recipe.run(["image_SC1_0_%d" % t for t in target_fields] +
-               ["make_clean_mask_sc1_0_%d" % t for t in target_fields] +
-               ["image_SC1_1_%d" % t for t in target_fields] +
-               ["make_clean_mask_sc1_1_%d" % t for t in target_fields] +
-               ["image_SC1_2_%d" % t for t in target_fields] +
-               ["make_clean_mask_sc1_2_%d" % t for t in target_fields] +
-               ["image_SC1_3_%d" % t for t in target_fields] +
-               (["fullrestore_SC1_%d" % t for t in target_fields] if do_full_restore else []) +
-               ["image_stokesv_residue_%d" % t for t in target_fields])
+                         "V as diagnostic" % target_field)
+    try:
+        recipe.run(["image_stokesv_residue_%d" % t for t in target_fields])
+    except:
+        vermeerkat.log.warn("Couldn't make STOKES V diagnostic image. Check "
+                            "the logs for details.")
