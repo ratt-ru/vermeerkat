@@ -117,6 +117,7 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
                        "weight": "briggs %2.f" % (cfg.wsclean_image_sc1_1.robust),
                        "npix": int(cfg.obs.im_npix * cfg.obs.padding),
                        "trim" : cfg.obs.im_npix,
+                       "cellsize": cfg.obs.angular_resolution * cfg.obs.sampling,
                        "clean_iterations": cfg.wsclean_image_sc1_2.clean_iterations,
                        "mgain": cfg.wsclean_image_sc1_2.mgain,
                        "channelsout": cfg.obs.im_numchans,
