@@ -164,7 +164,7 @@ def configuration(args=None):
         default=os.path.join(vermeerkat.install_path(),
             'conf', 'default.conf'),)
     # Parse configuration file arguments, if any
-    args, remaining_args = parser.parse_known_args()
+    args, remaining_args = parser.parse_known_args(args)
 
     # Lambda for transforming sections and options
     xformer = lambda s: s.lower().replace('-', '_')
