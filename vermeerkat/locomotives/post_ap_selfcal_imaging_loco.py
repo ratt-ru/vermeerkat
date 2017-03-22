@@ -29,10 +29,7 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
     for target_field, target in zip(target_fields, targets):
         # make another mfs image and clean down gradually using masks
         model_prefix = cfg.obs.basename + "_LSM1_" + plot_name[target.name]
-        model_master = cfg.obs.basename + \
-                       "_LSM_concatenated_" + \
-                       plot_name[target.name] + \
-                       ".lsm.html"
+        model_name = model_prefix + ".lsm.html"
         imname_prefix = cfg.obs.basename + "_SC1_0_" + plot_name[target.name]
         imname = imname_prefix + "-MFS-image.fits"
         recipe.add("cab/wsclean", "wsclean_SC1_0_%d" % target_field,
@@ -174,7 +171,7 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
             recipe.add("cab/tigger_restore", "full_restore_SC1_%d" % target_field,
                        {
                            "input-image": "%s:output" % imname,
-                           "input-skymodel": "%s:output" % model_master,
+                           "input-skymodel": "%s:output" % model_name,
                            "output-image": '%s:output' % imname_mfs_fullrest,
                            "freq": cfg.obs.freq_0,
                        },
