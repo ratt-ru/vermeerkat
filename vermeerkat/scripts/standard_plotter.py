@@ -1,13 +1,14 @@
 #!/usr/bin/python
-from matplotlib import pyplot as plt
-import numpy as np
-import os
-import vermeerkat
-from vermeerkat.caltable_parser import read_caltable
-from vermeerkat.caltable_parser import convert_pb_to_casaspi
 import argparse
+import os
 import sys
+
+import numpy as np
 from astropy.io import fits
+from matplotlib import pyplot as plt
+
+import vermeerkat
+from vermeerkat.dispatch_crew.caltable_parser import read_caltable
 
 ref_table = os.path.dirname(
         os.path.abspath(vermeerkat.__file__)) + "/southern_calibrators.txt"

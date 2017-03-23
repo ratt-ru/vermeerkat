@@ -36,6 +36,8 @@ def merge_observation_metadata(cfg, obs_metadata):
     obs.post_mit_ampcal_table = "%s.1.2gc.G1:output" % obs.basename
     obs.post_mit_fluxcal_table = "%s.1.2gc.fluxscale:output" % obs.basename
     obs.post_mit_bpasscal_table = "%s.1.2gc.B0:output" % obs.basename
+    obs.casa_SC0_gain_table = "%s.sc0.G0:output" % obs.basename
+    obs.casa_SC1_gain_table = "%s.sc1.G0:output" % obs.basename
 
     #Observation properties
     obs.refant = str(obs_metadata["RefAntenna"])
@@ -45,14 +47,15 @@ def merge_observation_metadata(cfg, obs_metadata):
     obs.nchans = obs_metadata["NumFreqChannels"]
     obs.chan_bandwidth = obs_metadata["ChannelWidth"]
     obs.lambda_min = (299792458.0 / (obs.freq_0 + (obs.nchans // 2) * obs.chan_bandwidth))
-    obs.telescope_max_baseline = 4.2e3 # TODO: need to automate calculation of this value
+    obs.telescope_max_baseline = cfg.general.max_baseline # TODO: need to automate calculation of this value
     obs.angular_resolution = np.rad2deg(obs.lambda_min /
                                     obs.telescope_max_baseline *
                                     1.220) * 3600 #nyquest rate in arcsecs
     obs.fov = cfg.general.fov * 3600 # 1 deg is good enough to cover FWHM of beam at L-Band
+    obs.padding = cfg.general.padding
     obs.sampling = cfg.general.sampling
     if obs.sampling>1:
-        raise ValueErro('PSF sampling is > 1. Please check your config file.')
+        raise ValueError('PSF sampling is > 1. Please check your config file.')
 
     obs.im_npix = int(obs.fov / obs.angular_resolution / obs.sampling)
     obs.bw_per_image_slice = float(cfg.general.bw_per_mfs_slice)
@@ -88,7 +91,7 @@ def fmt_seconds(seconds, format=None):
 
     return datetime.datetime.utcfromtimestamp(seconds).strftime(format)
 
-def categorise_fields(scans):
+def categorise_fields(scans, cfg):
     """
     Categorise fields into targets, gain calibrators and bandpass calibrators
     """
@@ -96,27 +99,35 @@ def categorise_fields(scans):
     gain_cal_candidates = []
     targets = []
     source_index = {}
-
+    custom_bpcal = cfg.general.bandpass_calibrator
+    custom_gcal = cfg.general.gain_calibrator
+    custom_target = cfg.general.target
+    if custom_target:
+        vermeerkat.log.warn("Ignoring source tags and using '%s' as a target "
+                            "field" % custom_target)
     for scan in scans:
         categorise_field = False
 
         if scan.name in source_index:
             continue
 
-        if "bpcal" in scan.tags:
+        if (custom_bpcal == scan.name if custom_bpcal else (
+            "bpcal" in scan.tags or "bfcal" in scan.tags)):
             bandpass_cal_candidates.append(scan)
             categorise_field = True
 
-        if "gaincal" in scan.tags:
+        if (custom_gcal == scan.name if custom_gcal else (
+            "gaincal" in scan.tags)):
             gain_cal_candidates.append(scan)
             categorise_field = True
 
-        if "target" in scan.tags:
+        if (custom_target == scan.name if custom_target else (
+            "target" in scan.tags)):
             targets.append(scan)
             categorise_field = True
 
         if not categorise_field:
-            vermeerkat.log.warn("Not using observed field %s" % name)
+            vermeerkat.log.warn("Not using observed field %s" % scan.name)
             continue
 
         source_index[scan.name] = len(source_index)

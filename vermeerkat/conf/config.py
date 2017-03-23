@@ -73,6 +73,69 @@ def general_section_parser():
     parser.add_argument('-g', '--gain-calibrator',
         help="Imaging gain calibrator ")
 
+    parser.add_argument('--skip_conversion',
+                        help="Skip conversion step",
+                        action="store_true",
+                        default=False)
+
+    parser.add_argument('--skip_rfi_flagging',
+                        help="Skip rfi flagging step",
+                        action="store_true",
+                        default=False)
+
+    parser.add_argument('--skip_initial_1gc',
+                        help="Skip initial 1gc step",
+                        action="store_true",
+                        default=False)
+
+    parser.add_argument('--skip_secondpass_flagging',
+                        help="Skip second pass RFI and mitigation flagging",
+                        action="store_true",
+                        default=False)
+
+    parser.add_argument('--skip_1gc_recalibration',
+                        help="Skip 1gc recalibration",
+                        action="store_true",
+                        default=False)
+
+    parser.add_argument('--skip_1gc_diagnostics',
+                        help="Skip 1gc diagnostic plotting",
+                        action="store_true",
+                        default=False)
+
+    parser.add_argument('--skip_1gc_imaging',
+                        help="Skip creation of 1gc image",
+                        action="store_true",
+                        default=False)
+
+    parser.add_argument('--skip_phaseonly_selfcal',
+                        help="Skip phaseonly_selfcal",
+                        action="store_true",
+                        default=False)
+
+    parser.add_argument('--skip_phaseonly_selfcal_imaging',
+                        help="Skip phaseonly_selfcal imaging",
+                        action="store_true",
+                        default=False)
+
+    parser.add_argument('--skip_ampphase_selfcal',
+                        help="Skip amplitude and phase selfcal",
+                        action="store_true",
+                        default=False)
+
+    parser.add_argument('--skip_ampphase_selfcal_imaging',
+                        help="Skip amplitude and phase selfcal imaging",
+                        action="store_true",
+                        default=False)
+
+    parser.add_argument('--replace_mt_with_casa_selfcal',
+                        help="Swap Meqtrees for CASA during selfcal",
+                        action="store_true",
+                        default=False)
+
+    parser.add_argument('-t', '--target',
+                        help="Manually specify imaging target")
+
     return parser
 
 # Dictionary of argument parsers for particular sections
@@ -100,7 +163,6 @@ def configuration(args=None):
         help='Configuration File',
         default=os.path.join(vermeerkat.install_path(),
             'conf', 'default.conf'),)
-
     # Parse configuration file arguments, if any
     args, remaining_args = parser.parse_known_args(args)
 
@@ -136,6 +198,7 @@ def configuration(args=None):
                 parser = parser_factory()
                 parser.set_defaults(**section_defaults)
                 section_args, args = parser.parse_known_args(args)
+
             # Otherwise just dump the section options into a namedtuple
             # that looks like one produced by argparse
             else:
