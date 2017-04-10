@@ -176,9 +176,10 @@ for obs_metadata in obs_metadatas:
     vermeerkat.log.info("MFS maps will contain %.3f MHz per slice" %
                             (cfg.obs.bw_per_image_slice / 1e6))
     vermeerkat.log.info("Maps will cover %.3f square degrees at "
-                        "angular resolution %.3f asec" %
+                        "angular resolution %.3f asec (npix: %d)" %
                             (cfg.obs.fov / 3600.0,
-                            cfg.obs.angular_resolution))
+                            cfg.obs.angular_resolution,
+                            cfg.obs.im_npix))
     vermeerkat.log.warn("Assuming maximum baseline "
                         "is %.2f meters" %
                             cfg.obs.telescope_max_baseline)

@@ -22,7 +22,7 @@ import argparse
 import itertools
 import os
 import sys
-
+import copy
 import ruamel.yaml
 
 import vermeerkat
@@ -57,7 +57,8 @@ def is_valid_file(parser, arg):
 
 def general_section_parser():
     """ Parses the general section """
-    parser = argparse.ArgumentParser("General Section")
+    parser = argparse.ArgumentParser("General Section",
+                                    add_help=False)
 
     # Solr server URL
     parser.add_argument('-s', '--solr-url',
@@ -136,6 +137,9 @@ def general_section_parser():
     parser.add_argument('-t', '--target',
                         help="Manually specify imaging target")
 
+    parser.add_argument('-r', '--ref_ant',
+                        help="Manually specify reference antenna")
+
     return parser
 
 # Dictionary of argument parsers for particular sections
@@ -155,7 +159,8 @@ def configuration(args=None):
     #=========================================================
 
     # Create parser object
-    parser = argparse.ArgumentParser("VerMeerKAT")
+    parser = argparse.ArgumentParser("VerMeerKAT",
+                                     parents=[_ARGPARSERS["general"]()])
 
     # Configuration file
     parser.add_argument('-c', '--config',
@@ -164,8 +169,9 @@ def configuration(args=None):
         default=os.path.join(vermeerkat.install_path(),
             'conf', 'default.conf'),)
     # Parse configuration file arguments, if any
+    args_bak = copy.deepcopy(args)
     args, remaining_args = parser.parse_known_args(args)
-
+    remaining_args = args_bak
     # Lambda for transforming sections and options
     xformer = lambda s: s.lower().replace('-', '_')
 

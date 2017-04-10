@@ -110,6 +110,7 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
         "solnorm": cfg.phase0.solnorm,
         "minsnr": cfg.phase0.minsnr,
         "gaintable": [cfg.obs.delaycal_table],
+        "uvrange":cfg.phase0.uvrange,
     }
 
     # Then a bandpass calibration, lets work out a solution
@@ -130,6 +131,7 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
         "gaintable": [cfg.obs.delaycal_table,
                       cfg.obs.phasecal_table],
         "interp": cfg.bandpass.interp,
+        "uvrange": cfg.bandpass.uvrange,
     }
 
     # Finally we do a second order correction on the gain
@@ -149,6 +151,7 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
                       cfg.obs.phasecal_table,
                       cfg.obs.bpasscal_table],
         "interp": cfg.gaincal.interp,
+        "uvrange":cfg.gaincal.uvrange,
     }
 
     # Scale the gaincal solutions amplitude to that of the

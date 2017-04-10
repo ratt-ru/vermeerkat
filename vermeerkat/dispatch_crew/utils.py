@@ -40,7 +40,8 @@ def merge_observation_metadata(cfg, obs_metadata):
     obs.casa_SC1_gain_table = "%s.sc1.G0:output" % obs.basename
 
     #Observation properties
-    obs.refant = str(obs_metadata["RefAntenna"])
+    obs.refant = str(obs_metadata["RefAntenna"]) if not cfg.general.ref_ant \
+                 else cfg.general.ref_ant
     obs.correlator_integration_time = obs_metadata["DumpPeriod"]
     obs.gain_sol_int = str(obs.correlator_integration_time * 3) + "s"
     obs.freq_0 = obs_metadata["CenterFrequency"]
@@ -50,14 +51,17 @@ def merge_observation_metadata(cfg, obs_metadata):
     obs.telescope_max_baseline = cfg.general.max_baseline # TODO: need to automate calculation of this value
     obs.angular_resolution = np.rad2deg(obs.lambda_min /
                                     obs.telescope_max_baseline *
-                                    1.220) * 3600 #nyquest rate in arcsecs
+                                    1.220) * 3600 * cfg.general.sampling #nyquest rate in arcsecs
     obs.fov = cfg.general.fov * 3600 # 1 deg is good enough to cover FWHM of beam at L-Band
     obs.padding = cfg.general.padding
     obs.sampling = cfg.general.sampling
     if obs.sampling>1:
         raise ValueError('PSF sampling is > 1. Please check your config file.')
 
-    obs.im_npix = int(obs.fov / obs.angular_resolution / obs.sampling)
+    obs.im_npix = int(np.ceil(obs.fov /
+                              obs.angular_resolution /
+                              2.0)) * 2 #round up to nearest even
+    obs.im_npix_padded = int(np.ceil(obs.im_npix * obs.padding / 2.0)) * 2
     obs.bw_per_image_slice = float(cfg.general.bw_per_mfs_slice)
     obs.im_numchans = int(np.ceil(obs_metadata["ChannelWidth"] * obs.nchans / obs.bw_per_image_slice))
 

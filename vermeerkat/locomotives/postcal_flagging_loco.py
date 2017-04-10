@@ -62,5 +62,6 @@ def launch(cfg, INPUT, MSDIR, OUTPUT, **kwargs):
         label="flag_phases_amplitudes:: Flag baselines based on calibrator phases")
 
     post_1gc_flagging = [ "autoflag_corrected_vis",
-                          "flag_phases_amplitudes"]
+                          #"flag_phases_amplitudes"
+                        ]
     recipe.run(post_1gc_flagging)
