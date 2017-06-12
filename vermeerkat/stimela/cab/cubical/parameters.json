@@ -1,0 +1,368 @@
+{
+  "binary": "gocubical",
+  "task": "cubical",
+  "description": "The Cubical Calibrator",
+  "prefix": "--",
+  "base": "stimela/base",
+  "msdir": true,
+  "parameters": [
+    {
+      "info": "Custom parset file (note: all paths in the parset must be relative to the mount points inside the container). Advance usage only.",
+      "name": "parset",
+      "default": null,
+      "dtype": "file",
+      "io": "input",
+      "required": false
+    },
+    {
+      "info": "number of CPUs to use (0 or 1 disables parallelism)",
+      "default": 0,
+      "required": false,
+      "name": "ncpu",
+      "dtype": "int"
+    },
+    {
+      "info": "minimum number of chunks to load into memory at once",
+      "default": 32,
+      "required": false,
+      "name": "min-chunks",
+      "dtype": "str"
+    },
+    {
+      "info": "log memory use",
+      "default": true,
+      "required": false,
+      "name": "memory",
+      "dtype": "bool"
+    },
+    {
+      "info": "disable progress bars and other pretty console output",
+      "default": false,
+      "required": false,
+      "name": "boring",
+      "dtype": "bool"
+    },
+    {
+      "info": "append to log file if it exists (default truncates)",
+      "default": false,
+      "required": false,
+      "name": "append",
+      "dtype": "bool"
+    },
+    {
+      "info": "column to read weights from",
+      "default": "WEIGHT_SPECTRUM",
+      "required": false,
+      "name": "column",
+      "dtype": "str"
+    },
+    {
+      "info": "seed random number generator with explicit seed, if given. Useful for reproducibility\nof the random-based optimizations (sparsification, etc.).",
+      "default": null,
+      "required": false,
+      "name": "random-seed",
+      "dtype": "str"
+    },
+    {
+      "info": "parset version number, for migration purposes. Can't be specified on command line.",
+      "default": 0.1,
+      "required": false,
+      "name": "parset-version",
+      "dtype": "str"
+    },
+    {
+      "info": "Solve in single or double precision",
+      "name": "precision",
+      "default": 32,
+      "dtype": "str",
+      "required": false,
+      "choices": [
+        "32",
+        "64"
+      ]
+    },
+    {
+      "info": "Type of Jones matrix to solve for",
+      "name": "jones-type",
+      "default": "complex-2x2",
+      "dtype": "str",
+      "required": false,
+      "choices": [
+        "complex-2x2",
+        "phase-diag",
+        "robust-2x2"
+      ]
+    },
+    {
+      "info": "???",
+      "default": 1,
+      "required": false,
+      "name": "time-int",
+      "dtype": "str"
+    },
+    {
+      "info": "???",
+      "default": 1,
+      "required": false,
+      "name": "freq-int",
+      "dtype": "str"
+    },
+    {
+      "info": "???",
+      "default": 200,
+      "required": false,
+      "name": "max-iter",
+      "dtype": "str"
+    },
+    {
+      "info": "???",
+      "default": 1e-06,
+      "required": false,
+      "name": "delta-g",
+      "dtype": "str"
+    },
+    {
+      "info": "???",
+      "default": 1e-05,
+      "required": false,
+      "name": "delta-chi",
+      "dtype": "str"
+    },
+    {
+      "info": "???",
+      "default": 5,
+      "required": false,
+      "name": "chi-int",
+      "dtype": "str"
+    },
+    {
+      "info": "amplitude clipping: flag solutions with diagonal amplitudes below this value.",
+      "default": 0.1,
+      "required": false,
+      "name": "clip-low",
+      "dtype": "float"
+    },
+    {
+      "info": "amplitude clipping: flag solutions with any amplitudes above this value.",
+      "default": 10.0,
+      "required": false,
+      "name": "clip-high",
+      "dtype": "float"
+    },
+    {
+      "info": "amplitude clipping begins after this number of iterations.",
+      "default": 5,
+      "required": false,
+      "name": "clip-after-iter",
+      "dtype": "int"
+    },
+    {
+      "info": "Re-estimate chi^2 and noise at the end of a solution cycle. Disabling last rites can save a\nbit of time, but makes the post-solution stats less informative.",
+      "default": true,
+      "required": false,
+      "name": "last-rites",
+      "dtype": "bool"
+    },
+    {
+      "info": "???",
+      "default": "legacy",
+      "required": false,
+      "name": "apply",
+      "dtype": "str"
+    },
+    {
+      "info": "insert BITFLAG column if missing, and initialize named flagset from FLAG/FLAG_ROW",
+      "default": "legacy",
+      "required": false,
+      "name": "auto-init",
+      "dtype": "str"
+    },
+    {
+      "info": "save flags to named flagset in BITFLAG. If none or 0, doesn't save",
+      "default": "cubecal",
+      "required": false,
+      "name": "save",
+      "dtype": "str"
+    },
+    {
+      "info": "if true, reninitializes BITFLAG column from scratch. Useful if you ended up with a dead one.",
+      "default": false,
+      "required": false,
+      "name": "reinit-bitflags",
+      "dtype": "bool"
+    },
+    {
+      "info": "???",
+      "default": 1.2,
+      "required": false,
+      "name": "tf-chisq-median",
+      "dtype": "str"
+    },
+    {
+      "info": "???",
+      "default": 0.5,
+      "required": false,
+      "name": "tf-np-median",
+      "dtype": "str"
+    },
+    {
+      "info": "???",
+      "default": 0.5,
+      "required": false,
+      "name": "time-density",
+      "dtype": "str"
+    },
+    {
+      "info": "???",
+      "default": 0.5,
+      "required": false,
+      "name": "chan-density",
+      "dtype": "str"
+    },
+    {
+      "info": "???",
+      "default": 0.5,
+      "required": false,
+      "name": "ddid-density",
+      "dtype": "str"
+    },
+    {
+      "info": "Output verbosity level.",
+      "default": 0,
+      "required": false,
+      "name": "verbose",
+      "dtype": "int"
+    },
+    {
+      "info": "Jumps into pdb on error.",
+      "default": false,
+      "required": false,
+      "name": "pdb",
+      "dtype": "bool"
+    },
+    {
+      "info": "predict model visibilities from given LSM (using Montblanc).",
+      "default": "",
+      "required": false,
+      "name": "lsm",
+      "dtype": "str"
+    },
+    {
+      "info": "read additional model visibilities from given MS column.",
+      "default": "MODEL_DATA",
+      "required": false,
+      "name": "column",
+      "dtype": "str"
+    },
+    {
+      "info": "use DDEs (--Model-LSM must be set).",
+      "default": 0,
+      "required": false,
+      "name": "ddes",
+      "dtype": "str"
+    },
+    {
+      "info": "FIELD_ID to read.",
+      "default": 0,
+      "required": false,
+      "name": "field",
+      "dtype": "int"
+    },
+    {
+      "info": "DATA_DESC_IDs to read. Default reads all. Can be specified as e.g. \"5\",\n\"5,6,7\", \"\"5~7\" (inclusive range), \"5:8\" (exclusive range), \"5:\" (from 5 to last).",
+      "default": null,
+      "required": false,
+      "name": "ddid",
+      "dtype": "str"
+    },
+    {
+      "info": "additional TaQL selection string",
+      "default": "",
+      "required": false,
+      "name": "taql",
+      "dtype": "str"
+    },
+    {
+      "info": "MS name",
+      "default": "",
+      "required": false,
+      "name": "ms",
+      "dtype": "str"
+    },
+    {
+      "info": "MS column to read for data",
+      "default": "DATA",
+      "required": false,
+      "name": "column",
+      "dtype": "str"
+    },
+    {
+      "info": "???",
+      "default": 16,
+      "required": false,
+      "name": "time-chunk",
+      "dtype": "str"
+    },
+    {
+      "info": "???",
+      "default": 16,
+      "required": false,
+      "name": "freq-chunk",
+      "dtype": "str"
+    },
+    {
+      "info": "If True, then time chunks will be broken up by change in SCAN_NUMBER.",
+      "default": true,
+      "required": false,
+      "name": "chunk-on-scans",
+      "dtype": "bool"
+    },
+    {
+      "info": "???",
+      "default": "",
+      "required": false,
+      "name": "single-chunk",
+      "dtype": "str"
+    },
+    {
+      "info": "Base name of output files.",
+      "default": "cubecal",
+      "required": false,
+      "name": "name",
+      "dtype": "str"
+    },
+    {
+      "info": "Save what visibilities to MS.",
+      "name": "vis",
+      "default": "corrected",
+      "dtype": "str",
+      "required": false,
+      "choices": [
+        "None",
+        "corrected",
+        "residual"
+      ]
+    },
+    {
+      "info": "Output MS column name for --Output-Vis.",
+      "default": "CORRECTED_DATA",
+      "required": false,
+      "name": "column",
+      "dtype": "str"
+    },
+    {
+      "info": "Generate summary plots.",
+      "default": true,
+      "required": false,
+      "name": "plots",
+      "dtype": "bool"
+    },
+    {
+      "info": "Show summary plots interactively.",
+      "default": true,
+      "required": false,
+      "name": "plots-show",
+      "dtype": "bool"
+    }
+  ]
+}
