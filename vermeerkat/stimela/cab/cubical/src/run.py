@@ -24,9 +24,9 @@ for param in cab['parameters']:
         continue
 
     if isinstance(value, list):
-        arg = "{0}{1} {2}".format(cab['prefix'], name, ",".join(value))
+        arg = '{0}{1}="{2}"'.format(cab['prefix'], name, ",".join(value))
     else:
-        arg = '{0}{1} {2}'.format(cab['prefix'], name, value)
+        arg = '{0}{1}="{2}"'.format(cab['prefix'], name, value)
 
     args.append(arg)
 

@@ -3,6 +3,7 @@
   "task": "cubical",
   "description": "The Cubical Calibrator",
   "prefix": "--",
+  "tag": "0.2.9",
   "base": "stimela/base",
   "msdir": true,
   "parameters": [
