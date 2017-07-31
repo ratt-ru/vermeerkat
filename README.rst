@@ -1,3 +1,6 @@
+**DEPRECATED PROTOTYPE: CHANGES TO BE INCORPORATED IN HI PIPELINE**
+====================================================================
+
 VerMeerKAT
 ==========
 
