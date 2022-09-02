@@ -29,5 +29,9 @@ pip install $PROJECTS_DIR/VermeerKAT
 pip install nose
 
 stimela pull -d
-python -m nose $PROJECTS_DIR/VermeerKAT/tests/acceptance_test.py || rm -rf $SINGULARITY_PULLFOLDER
-rm -rf $SINGULARITY_PULLFOLDER
+function finish {
+    rm -rf $SINGULARITY_PULLFOLDER
+}
+trap finish EXIT
+
+python -m nose $PROJECTS_DIR/VermeerKAT/tests/acceptance_test.py
