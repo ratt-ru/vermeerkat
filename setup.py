@@ -36,7 +36,7 @@ setup(name = PACKAGE_NAME,
       packages=[PACKAGE_NAME],
       install_requires = requirements,
       include_package_data = True,
-      python_requires="==3.6",
+      python_requires=">=3.6",
       entry_points={
           'console_scripts': ['vermeerkat=vermeerkat.bin.vermeerkat:main'],
       },
