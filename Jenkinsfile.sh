@@ -25,8 +25,9 @@ mkdir $PROJECTS_DIR/.stimela_images
 cd $TEST_OUTPUT_DIR
 virtualenv $PROJECTS_DIR/venv -p python3.6
 source $PROJECTS_DIR/venv/bin/activate
-pip install $PROJECTS_DIR/VermeerKAT
-pip install nose
+python3.6 -m pip install -U pip setuptools wheel
+python3.6 -m pip install $PROJECTS_DIR/VermeerKAT
+python3.6 -m pip install nose
 
 stimela pull -d
 function finish {
@@ -34,4 +35,4 @@ function finish {
 }
 trap finish EXIT
 
-python -m nose $PROJECTS_DIR/VermeerKAT/tests/acceptance_test.py
+python3.6 -m nose $PROJECTS_DIR/VermeerKAT/tests/acceptance_test.py
